@@ -1,4 +1,4 @@
-use linker_loader_rs::lib::MAGIC_NUMBER;
+use linkerloader::lib::MAGIC_NUMBER;
 
 fn main() {
     println!("Hello, world!");

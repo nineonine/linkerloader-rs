@@ -3,5 +3,8 @@
 version = 3
 
 [[package]]
-name = "linker_loader_rs"
+name = "linkerloader"
 version = "0.1.0"
+dependencies = [
+ "linkerloader",
+]
