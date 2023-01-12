@@ -1,6 +1,4 @@
-mod utils;
-use utils::read_object_file;
-
+use linkerloader::utils::read_object_file;
 use linkerloader::lib::MAGIC_NUMBER;
 
 #[test]
