@@ -1,5 +1,5 @@
-mod object;
-mod segment;
-mod symbol_table;
-mod relocation;
-mod errors;
+pub mod object;
+pub mod segment;
+pub mod symbol_table;
+pub mod relocation;
+pub mod errors;
