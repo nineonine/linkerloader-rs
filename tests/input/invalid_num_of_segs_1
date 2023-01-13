@@ -1,0 +1,4 @@
+LINK
+0 0 0
+.data 4000 C00 PWR
+.bss 5000 1900 RW

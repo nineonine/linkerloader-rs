@@ -1,20 +1,21 @@
 use std::num::ParseIntError;
 
-use crate::types::segment;
+use crate::types::segment::{Segment, parse_segment};
 use crate::types::errors::ParseError;
 
 #[derive(Debug)]
 pub struct ObjectFile {
-    nsegs: i32,
-    nsyms: i32,
-    nrels: i32,
+    pub nsegs: i32,
+    pub nsyms: i32,
+    pub nrels: i32,
+    pub segments: Vec<Segment>
 }
 
 pub const MAGIC_NUMBER: &'static str = "LINK";
 
 pub fn parse_object_file(file_contents: String) -> Result<ObjectFile, ParseError> {
 
-    let mut input = file_contents.lines();
+    let mut input = file_contents.lines().peekable();
 
     // magic number check
     match input.next() {
@@ -34,7 +35,7 @@ pub fn parse_object_file(file_contents: String) -> Result<ObjectFile, ParseError
         Some(vals) => {
             let vs: Vec<Result<i32, ParseIntError>> =
                     vals.split_whitespace()
-                        .map(|x| x.parse())
+                        .map(|x| i32::from_str_radix(x, 16))
                         .collect();
             match vs.as_slice() {
                 [n_segs, n_syms, n_rels] => {
@@ -56,9 +57,31 @@ pub fn parse_object_file(file_contents: String) -> Result<ObjectFile, ParseError
         }
     }
 
+    // parse segments
+    let mut segs = vec![];
+    for i in 0..nsegs {
+        match input.next() {
+            Some(s) => {
+                match parse_segment(s) {
+                    Ok(seg) => segs.push(seg),
+                    Err(e) => return Err(e),
+                }
+            },
+            None => return Err(ParseError::InvalidNumOfSegments),
+        }
+    }
+    let segments: Vec<Segment> = segs;
+    // more segments than nsegs - error out
+    if let Some(&l) = input.peek() {
+        if parse_segment(l).is_ok() {
+            return Err(ParseError::InvalidNumOfSegments);
+        }
+    }
+
     return Ok(ObjectFile {
         nsegs,
         nsyms,
         nrels,
+        segments,
     });
 }

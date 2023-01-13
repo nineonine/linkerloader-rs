@@ -9,4 +9,11 @@ pub enum ParseError {
     InvalidNSegsValue,
     InvalidNSymsValue,
     InvalidNRelsValue,
+
+    InvalidSegment,
+    InvalidSegmentName,
+    InvalidSegmentStart,
+    InvalidSegmentLen,
+    InvalidSegmentDescr,
+    InvalidNumOfSegments,
 }
