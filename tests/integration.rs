@@ -104,6 +104,7 @@ fn invalid_num_of_segs_4() {
 #[test]
 fn segments() {
     let res = read_object(&tests_base_loc("segments_1"));
+    println!("{:?}", res);
     assert!(res.is_ok());
     match res {
         Err(_) => panic!("unexpected"),

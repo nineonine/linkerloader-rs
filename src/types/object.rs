@@ -15,7 +15,7 @@ pub const MAGIC_NUMBER: &'static str = "LINK";
 
 pub fn parse_object_file(file_contents: String) -> Result<ObjectFile, ParseError> {
 
-    let mut input = file_contents.lines().peekable();
+    let mut input: std::iter::Peekable<std::str::Lines> = file_contents.lines().peekable();
 
     // magic number check
     match input.next() {
@@ -58,8 +58,8 @@ pub fn parse_object_file(file_contents: String) -> Result<ObjectFile, ParseError
     }
 
     // parse segments
-    let mut segs = vec![];
-    for i in 0..nsegs {
+    let mut segs: Vec<Segment> = vec![];
+    for _ in 0..nsegs {
         match input.next() {
             Some(s) => {
                 match parse_segment(s) {

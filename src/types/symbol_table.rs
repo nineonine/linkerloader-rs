@@ -6,10 +6,10 @@
 // D for defined or U for undefined. Symbols are also numbered in the order
 // they’re listed, starting at 1.
 pub struct SymbolTable {
-    st_name: String,
-    st_value: i32,
-    st_seg: i32,
-    st_type: SymbolTableType,
+    pub st_name: String,
+    pub st_value: i32,
+    pub st_seg: i32,
+    pub st_type: SymbolTableType,
 }
 
 pub enum SymbolTableType {

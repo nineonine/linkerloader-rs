@@ -1,5 +1,3 @@
-use crate::types::symbol_table;
-use crate::types::relocation;
 use crate::types::errors::ParseError;
 
 // Each segment definition contains the

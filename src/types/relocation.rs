@@ -14,11 +14,11 @@ use crate::types::segment::SegmentName;
 // the segment table, and there must be segment data for each "present" segment.
 // The length of the hex string is determined by the the defined length of the
 pub struct Relocation {
-    rel_loc: i32,
-    rel_seg: SegmentName,
-    rel_ref: RelRef,
-    rel_type: RelType,
-    rel_data: String,
+    pub rel_loc: i32,
+    pub rel_seg: SegmentName,
+    pub rel_ref: RelRef,
+    pub rel_type: RelType,
+    pub rel_data: String,
 }
 
 pub enum RelRef {
