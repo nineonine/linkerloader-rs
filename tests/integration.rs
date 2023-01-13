@@ -98,7 +98,7 @@ fn invalid_num_of_segs_3() {
 
 #[test]
 fn invalid_num_of_segs_4() {
-    test_failure(ParseError::InvalidNumOfSegments, &tests_base_loc("invalid_num_of_segs_3"));
+    test_failure(ParseError::InvalidNumOfSegments, &tests_base_loc("invalid_num_of_segs_4"));
 }
 
 #[test]
