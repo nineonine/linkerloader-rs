@@ -1,7 +1,12 @@
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ParseError {
-    ParseError(String),
+    UnexpectedParseError,
     MissingMagicNumber,
     InvalidMagicNumber,
+    MissingNSegsNSumsNRels,
+    InvalidNSegsNSumsNRels,
+    InvalidNSegsValue,
+    InvalidNSymsValue,
+    InvalidNRelsValue,
 }
