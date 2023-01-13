@@ -33,7 +33,9 @@ pub fn parse_segment(s: &str) -> Result<Segment, ParseError> {
                 ".text" => { segment_name = SegmentName::TEXT },
                 ".data" => { segment_name = SegmentName::DATA },
                 ".bss" =>  { segment_name = SegmentName::BSS },
-                _ => return Err(ParseError::InvalidSegmentName),
+                s =>
+                    if s.starts_with(".") { segment_name = SegmentName::CUSTOM(String::from(s)) }
+                    else { return Err(ParseError::InvalidSegmentName); }
             }
             match i32::from_str_radix(start, 16) {
                 Err(_) => return Err(ParseError::InvalidSegmentStart),
@@ -69,6 +71,7 @@ pub enum SegmentName {
     TEXT,
     DATA,
     BSS,
+    CUSTOM(String),
 }
 
 #[derive(Debug, Eq, PartialEq)]
