@@ -2,6 +2,7 @@
 #[derive(Debug, PartialEq, Eq)]
 pub enum ParseError {
     UnexpectedParseError,
+
     MissingMagicNumber,
     InvalidMagicNumber,
     MissingNSegsNSumsNRels,
@@ -16,4 +17,12 @@ pub enum ParseError {
     InvalidSegmentLen,
     InvalidSegmentDescr,
     InvalidNumOfSegments,
+
+    InvalidSymbolTableEntry,
+    InvalidSTEType,
+    InvalidSTEValue,
+    InvalidSTESegment,
+    InvalidNumOfSTEs,
+    STESegmentRefOutOfRange,
+    NonZeroSegmentForUndefinedSTE
 }

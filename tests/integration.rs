@@ -15,9 +15,14 @@ fn test_magic_number_simple() {
 
 fn test_failure(e0: ParseError, fp: &str) {
     let res = read_object(fp);
-    assert!(res.is_err());
+    if res.is_ok() {
+        println!("{:?}", res);
+        assert!(res.is_err());
+    }
     match res {
-        Ok(_) => panic!("unexpected"),
+        Ok(_) => {
+            panic!("unexpected");
+        },
         Err(e) => assert_eq!(e0, e),
     }
 }
@@ -118,4 +123,34 @@ fn segments() {
             assert_eq!(SegmentDescr::P, seg1.segment_descr[1]);
         }
     }
+}
+
+#[test]
+fn invalid_symbol_table_entry() {
+    test_failure(ParseError::InvalidSymbolTableEntry, &tests_base_loc("invalid_symbol_table_entry"));
+}
+
+#[test]
+fn invalid_symbol_table_entry_seg() {
+    test_failure(ParseError::InvalidSTESegment, &tests_base_loc("invalid_symbol_table_entry_seg"));
+}
+
+#[test]
+fn invalid_symbol_table_type() {
+    test_failure(ParseError::InvalidSTEType, &tests_base_loc("invalid_symbol_table_entry_type"));
+}
+
+#[test]
+fn invalid_symbol_table_value() {
+    test_failure(ParseError::InvalidSTEValue, &tests_base_loc("invalid_symbol_table_entry_value"));
+}
+
+#[test]
+fn invalid_symbol_table_segment_out_of_range() {
+    test_failure(ParseError::STESegmentRefOutOfRange, &tests_base_loc("invalid_symbol_table_seg_out_of_range"));
+}
+
+#[test]
+fn non_zero_segment_for_undefined_ste() {
+    test_failure(ParseError::NonZeroSegmentForUndefinedSTE, &tests_base_loc("non_zero_segment_for_undefined_ste"));
 }

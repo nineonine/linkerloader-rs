@@ -1,6 +1,7 @@
 use std::num::ParseIntError;
 
 use crate::types::segment::{Segment, parse_segment};
+use crate::types::symbol_table::{STE, parse_symbol_table_entry};
 use crate::types::errors::ParseError;
 
 #[derive(Debug)]
@@ -8,7 +9,8 @@ pub struct ObjectFile {
     pub nsegs: i32,
     pub nsyms: i32,
     pub nrels: i32,
-    pub segments: Vec<Segment>
+    pub segments: Vec<Segment>,
+    pub symbol_table: Vec<STE>,
 }
 
 pub const MAGIC_NUMBER: &'static str = "LINK";
@@ -78,10 +80,32 @@ pub fn parse_object_file(file_contents: String) -> Result<ObjectFile, ParseError
         }
     }
 
+    // parse symbol table
+    let mut stes: Vec<STE> = vec![];
+    for _ in 0..nsyms {
+        match input.next() {
+            Some(s) => {
+                match parse_symbol_table_entry(nsegs, s) {
+                    Ok(ste) => stes.push(ste),
+                    Err(e) => return Err(e),
+                }
+            },
+            None => return Err(ParseError::InvalidNumOfSTEs),
+        }
+    }
+    let symbol_table: Vec<STE> = stes;
+    // more segments than nsegs - error out
+    if let Some(&l) = input.peek() {
+        if parse_symbol_table_entry(nsegs, l).is_ok() {
+            return Err(ParseError::InvalidNumOfSTEs);
+        }
+    }
+
     return Ok(ObjectFile {
         nsegs,
         nsyms,
         nrels,
         segments,
+        symbol_table,
     });
 }
