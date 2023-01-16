@@ -19,6 +19,22 @@ pub struct Segment {
     pub segment_descr: Vec<SegmentDescr>, // TODO: ensure uniqueness when parsing
 }
 
+// TODO: allow any name?
+#[derive(Debug, Eq, PartialEq)]
+pub enum SegmentName {
+    TEXT,
+    DATA,
+    BSS,
+    CUSTOM(String),
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum SegmentDescr {
+    R, // readable
+    W, // writable
+    P, // oresebt in the object file
+}
+
 pub fn parse_segment(s: &str) -> Result<Segment, ParseError> {
     let segment_name;
     let segment_start;
@@ -61,22 +77,6 @@ pub fn parse_segment(s: &str) -> Result<Segment, ParseError> {
         segment_len,
         segment_descr,
     })
-}
-
-// TODO: allow any name?
-#[derive(Debug, Eq, PartialEq)]
-pub enum SegmentName {
-    TEXT,
-    DATA,
-    BSS,
-    CUSTOM(String),
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub enum SegmentDescr {
-    R, // readable
-    W, // writable
-    P, // oresebt in the object file
 }
 
 fn segment_descr_from_chr(c: char) -> Result<SegmentDescr, ParseError> {

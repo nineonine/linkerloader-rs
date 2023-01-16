@@ -15,6 +15,12 @@ pub struct STE {
     pub st_type: SymbolTableEntryType,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+pub enum SymbolTableEntryType {
+    D, // defined
+    U, // undefined
+}
+
 pub fn parse_symbol_table_entry(nsegs: i32, s: &str) -> Result<STE, ParseError> {
     let st_name;
     let st_value;
@@ -54,10 +60,4 @@ pub fn parse_symbol_table_entry(nsegs: i32, s: &str) -> Result<STE, ParseError> 
         st_seg,
         st_type
     })
-}
-
-#[derive(Debug, Eq, PartialEq)]
-pub enum SymbolTableEntryType {
-    D, // defined
-    U, // undefined
 }
