@@ -10,9 +10,10 @@ use super::errors::ParseError;
 #[derive(Debug)]
 pub struct STE {
     pub st_name: String,
-    pub st_value: i32,
     pub st_seg: i32,
     pub st_type: SymbolTableEntryType,
+    pub st_value: i32, // the book assignment is a bit vague (at least for someone who does
+                       // not yet fully understand the nomenclature and intricacies of linking...)
 }
 
 #[derive(Debug, Eq, PartialEq)]

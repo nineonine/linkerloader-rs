@@ -24,5 +24,11 @@ pub enum ParseError {
     InvalidSTESegment,
     InvalidNumOfSTEs,
     STESegmentRefOutOfRange,
-    NonZeroSegmentForUndefinedSTE
+    NonZeroSegmentForUndefinedSTE,
+
+    InvalidRelocationEntry,
+    InvalidRelLoc,
+    RelSegmentOutOfRange,
+    RelSymbolOutOfRange,
+    InvalidRelType,
 }

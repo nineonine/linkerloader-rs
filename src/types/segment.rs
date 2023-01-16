@@ -20,7 +20,7 @@ pub struct Segment {
 }
 
 // TODO: allow any name?
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum SegmentName {
     TEXT,
     DATA,
