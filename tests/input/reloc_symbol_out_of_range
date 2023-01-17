@@ -1,0 +1,6 @@
+LINK
+1 2 1
+.text 1000 2500 RP
+foo 38D 1 D
+bas 25A 1 D
+600 1 3 A4

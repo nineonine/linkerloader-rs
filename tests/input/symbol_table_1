@@ -1,0 +1,5 @@
+LINK
+1 2 0
+.text 1000 2500 RP
+foo 38D 1 D
+bas 25A 0 U

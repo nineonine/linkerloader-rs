@@ -2,6 +2,7 @@ use std::num::ParseIntError;
 
 use crate::types::segment::{Segment, parse_segment};
 use crate::types::symbol_table::{STE, parse_symbol_table_entry};
+use crate::types::relocation::{Relocation, parse_relocation};
 use crate::types::errors::ParseError;
 
 #[derive(Debug)]
@@ -11,6 +12,7 @@ pub struct ObjectFile {
     pub nrels: i32,
     pub segments: Vec<Segment>,
     pub symbol_table: Vec<STE>,
+    pub relocations: Vec<Relocation>,
 }
 
 pub const MAGIC_NUMBER: &'static str = "LINK";
@@ -41,16 +43,16 @@ pub fn parse_object_file(file_contents: String) -> Result<ObjectFile, ParseError
                         .collect();
             match vs.as_slice() {
                 [n_segs, n_syms, n_rels] => {
-                    match *n_segs {
-                        Ok(v) => nsegs = v,
+                    match n_segs {
+                        Ok(v) => nsegs = *v,
                         Err(_) => return Err(ParseError::InvalidNSegsValue),
                     }
-                    match *n_syms {
-                        Ok(v) => nsyms = v,
+                    match n_syms {
+                        Ok(v) => nsyms = *v,
                         Err(_) => return Err(ParseError::InvalidNSymsValue),
                     }
-                    match *n_rels {
-                        Ok(v) => nrels = v,
+                    match n_rels {
+                        Ok(v) => nrels = *v,
                         Err(_) => return Err(ParseError::InvalidNRelsValue),
                     }
                 },
@@ -101,11 +103,33 @@ pub fn parse_object_file(file_contents: String) -> Result<ObjectFile, ParseError
         }
     }
 
+    // parse relocation
+    let mut rels: Vec<Relocation> = vec![];
+    for _ in 0..nrels {
+        match input.next() {
+            Some(s) => {
+                match parse_relocation(&segments, &symbol_table, s) {
+                    Ok(rel) => rels.push(rel),
+                    Err(e) => return Err(e),
+                }
+            },
+            None => return Err(ParseError::InvalidNumOfRelocations),
+        }
+    }
+    let relocations: Vec<Relocation> = rels;
+    // more relocs than nrels - error out
+    if let Some(&l) = input.peek() {
+        if parse_relocation(&segments, &symbol_table, l).is_ok() {
+            return Err(ParseError::InvalidNumOfRelocations);
+        }
+    }
+
     return Ok(ObjectFile {
         nsegs,
         nsyms,
         nrels,
         segments,
         symbol_table,
+        relocations,
     });
 }

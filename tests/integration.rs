@@ -1,6 +1,8 @@
 use linkerloader::types::errors::ParseError;
 use linkerloader::types::object::MAGIC_NUMBER;
 use linkerloader::types::segment::{SegmentName, SegmentDescr};
+use linkerloader::types::symbol_table::{STE, SymbolTableEntryType};
+use linkerloader::types::relocation::{Relocation, RelRef, RelType};
 use linkerloader::lib::read_object;
 use linkerloader::utils::read_object_file;
 
@@ -153,4 +155,90 @@ fn invalid_symbol_table_segment_out_of_range() {
 #[test]
 fn non_zero_segment_for_undefined_ste() {
     test_failure(ParseError::NonZeroSegmentForUndefinedSTE, &tests_base_loc("non_zero_segment_for_undefined_ste"));
+}
+
+#[test]
+fn symbol_table() {
+    let res = read_object(&tests_base_loc("symbol_table_1"));
+    println!("{:?}", res);
+    assert!(res.is_ok());
+    match res {
+        Err(_) => panic!("unexpected"),
+        Ok(obj) => {
+            assert_eq!(obj.nsyms, obj.symbol_table.len() as i32);
+            let ste1: &STE = &obj.symbol_table[0];
+            assert_eq!("foo", ste1.st_name);
+            assert_eq!(0x38d, ste1.st_value);
+            assert_eq!(1, ste1.st_seg); // 2500 decimal
+            assert_eq!(SymbolTableEntryType::D, ste1.st_type);
+            let ste2: &STE= &obj.symbol_table[1];
+            assert_eq!("bas", ste2.st_name);
+            assert_eq!(0x25a, ste2.st_value);
+            assert_eq!(0, ste2.st_seg); // 2500 decimal
+            assert_eq!(SymbolTableEntryType::U, ste2.st_type);
+        }
+    }
+}
+
+#[test]
+fn invalid_relocation_entry() {
+    test_failure(ParseError::InvalidRelocationEntry, &tests_base_loc("invalid_reloc_entry"));
+}
+
+#[test]
+fn invalid_relocation_addr() {
+    test_failure(ParseError::InvalidRelRef, &tests_base_loc("invalid_reloc_addr"));
+}
+
+#[test]
+fn rel_segment_out_of_range() {
+    test_failure(ParseError::RelSegmentOutOfRange, &tests_base_loc("reloc_segment_out_of_range"));
+}
+
+#[test]
+fn rel_symbol_out_of_range() {
+    test_failure(ParseError::RelSymbolOutOfRange, &tests_base_loc("reloc_symbol_out_of_range"));
+}
+
+#[test]
+fn invalid_reloc_type() {
+    test_failure(ParseError::InvalidRelType, &tests_base_loc("invalid_reloc_type"));
+}
+
+#[test]
+fn invalid_reloc_segment() {
+    test_failure(ParseError::InvalidRelSegment, &tests_base_loc("invalid_reloc_segment"));
+}
+
+#[test]
+fn invalid_num_of_relocations_1() {
+    test_failure(ParseError::InvalidNumOfRelocations, &tests_base_loc("invalid_num_of_relocations_1"));
+}
+
+#[test]
+fn invalid_num_of_relocations_2() {
+    test_failure(ParseError::InvalidNumOfRelocations, &tests_base_loc("invalid_num_of_relocations_2"));
+}
+
+#[test]
+fn relocations() {
+    let res = read_object(&tests_base_loc("relocations_1"));
+    println!("{:?}", res);
+    assert!(res.is_ok());
+    match res {
+        Err(_) => panic!("unexpected"),
+        Ok(obj) => {
+            assert_eq!(obj.nrels, obj.relocations.len() as i32);
+            let rel1: &Relocation = &obj.relocations[0];
+            assert_eq!(0x5dc, rel1.rel_loc);
+            assert_eq!(SegmentName::TEXT, rel1.rel_seg);
+            assert_eq!(RelRef::SymbolRef(1), rel1.rel_ref);
+            assert_eq!(RelType::R(4), rel1.rel_type);
+            let rel2: &Relocation= &obj.relocations[1];
+            assert_eq!(0x3f2, rel2.rel_loc);
+            assert_eq!(SegmentName::TEXT, rel2.rel_seg);
+            assert_eq!(RelRef::SymbolRef(2), rel2.rel_ref);
+            assert_eq!(RelType::R(4), rel2.rel_type);
+        }
+    }
 }

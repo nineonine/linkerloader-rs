@@ -17,25 +17,25 @@ use crate::types::symbol_table::{STE};
 // The length of the hex string is determined by the the defined length of the
 #[derive(Debug)]
 pub struct Relocation {
-    pub rel_loc: i32, // location offset
+    pub rel_loc: i32, // relocation address
     pub rel_seg: SegmentName,
     pub rel_ref: RelRef,
     pub rel_type: RelType,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum RelRef {
     SegmentRef(i32),
     SymbolRef(i32),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum RelType {
     A(i32),
     R(i32),
 }
 
-pub fn parse_relocation(segs: Vec<Segment>, st: Vec<STE>, s: &str) -> Result<Relocation, ParseError> {
+pub fn parse_relocation(segs: &[Segment], st: &[STE], s: &str) -> Result<Relocation, ParseError> {
     let rel_loc;
     let rel_seg;
     let rel_ref;
@@ -45,11 +45,11 @@ pub fn parse_relocation(segs: Vec<Segment>, st: Vec<STE>, s: &str) -> Result<Rel
     match vs.as_slice() {
         [loc, seg, _ref, ty] => {
             match i32::from_str_radix(loc, 16) {
-                Err(_) => return Err(ParseError::InvalidRelLoc),
+                Err(_) => return Err(ParseError::InvalidRelRef),
                 Ok(i) => rel_loc = i,
             }
             match i32::from_str_radix(seg, 16) {
-                Err(_) => return Err(ParseError::InvalidRelLoc),
+                Err(_) => return Err(ParseError::InvalidRelSegment),
                 Ok(i) => {
                     match segs.get((i-1) as usize) {
                         None => return Err(ParseError::RelSegmentOutOfRange),
@@ -57,12 +57,12 @@ pub fn parse_relocation(segs: Vec<Segment>, st: Vec<STE>, s: &str) -> Result<Rel
                     }
                 },
             }
-            // for now just always assume relocation refs are symbols
             match i32::from_str_radix(_ref, 16) {
-                Err(_) => return Err(ParseError::InvalidRelLoc),
+                Err(_) => return Err(ParseError::InvalidRelRef),
                 Ok(i) => {
                     match st.get((i-1) as usize) {
                         None => return Err(ParseError::RelSymbolOutOfRange),
+                        // for now just always assume relocation refs are symbols
                         Some(_) => rel_ref = RelRef::SymbolRef(i),
                     }
                 },
