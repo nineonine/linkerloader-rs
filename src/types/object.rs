@@ -1,4 +1,6 @@
 use std::num::ParseIntError;
+use std::iter::Peekable;
+use std::str::Lines;
 
 use crate::types::segment::{Segment, SegmentData, parse_segment, parse_segment_data};
 use crate::types::symbol_table::{STE, parse_symbol_table_entry};
@@ -20,7 +22,7 @@ pub const MAGIC_NUMBER: &'static str = "LINK";
 
 pub fn parse_object_file(file_contents: String) -> Result<ObjectFile, ParseError> {
 
-    let mut input: std::iter::Peekable<std::str::Lines> = file_contents.lines().peekable();
+    let mut input: Peekable<Lines> = file_contents.lines().peekable();
 
     // magic number check
     match input.next() {
@@ -35,30 +37,12 @@ pub fn parse_object_file(file_contents: String) -> Result<ObjectFile, ParseError
     let nsegs: i32;
     let nsyms: i32;
     let nrels: i32;
-    match input.next() {
-        None => return Err(ParseError::MissingNSegsNSumsNRels),
-        Some(vals) => {
-            let vs: Vec<Result<i32, ParseIntError>> =
-                    vals.split_whitespace()
-                        .map(|x| i32::from_str_radix(x, 16))
-                        .collect();
-            match vs.as_slice() {
-                [n_segs, n_syms, n_rels] => {
-                    match n_segs {
-                        Ok(v) => nsegs = *v,
-                        Err(_) => return Err(ParseError::InvalidNSegsValue),
-                    }
-                    match n_syms {
-                        Ok(v) => nsyms = *v,
-                        Err(_) => return Err(ParseError::InvalidNSymsValue),
-                    }
-                    match n_rels {
-                        Ok(v) => nrels = *v,
-                        Err(_) => return Err(ParseError::InvalidNRelsValue),
-                    }
-                },
-                _otherwise => return Err(ParseError::InvalidNSegsNSumsNRels)
-            }
+    match parse_nsegs_nsyms_nrels(&mut input) {
+        Err(e) => return Err(e),
+        Ok((segs, syms, rels)) => {
+            nsegs = segs;
+            nsyms = syms;
+            nrels = rels;
         }
     }
 
@@ -155,4 +139,37 @@ pub fn parse_object_file(file_contents: String) -> Result<ObjectFile, ParseError
         relocations,
         object_data,
     });
+}
+
+fn parse_nsegs_nsyms_nrels(input: &mut Peekable<Lines>) -> Result<(i32, i32, i32), ParseError> {
+    let nsegs: i32;
+    let nsyms: i32;
+    let nrels: i32;
+    match input.next() {
+        None => return Err(ParseError::MissingNSegsNSumsNRels),
+        Some(vals) => {
+            let vs: Vec<Result<i32, ParseIntError>> =
+                    vals.split_whitespace()
+                        .map(|x| i32::from_str_radix(x, 16))
+                        .collect();
+            match vs.as_slice() {
+                [n_segs, n_syms, n_rels] => {
+                    match n_segs {
+                        Ok(v) => nsegs = *v,
+                        Err(_) => return Err(ParseError::InvalidNSegsValue),
+                    }
+                    match n_syms {
+                        Ok(v) => nsyms = *v,
+                        Err(_) => return Err(ParseError::InvalidNSymsValue),
+                    }
+                    match n_rels {
+                        Ok(v) => nrels = *v,
+                        Err(_) => return Err(ParseError::InvalidNRelsValue),
+                    }
+                },
+                _otherwise => return Err(ParseError::InvalidNSegsNSumsNRels)
+            }
+        }
+    }
+    Ok((nsegs, nsyms, nrels))
 }
