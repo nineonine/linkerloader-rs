@@ -20,7 +20,6 @@ pub struct Segment {
     pub segment_descr: Vec<SegmentDescr>, // TODO: ensure uniqueness when parsing
 }
 
-// TODO: allow any name?
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum SegmentName {
     TEXT,
@@ -103,8 +102,6 @@ pub fn parse_segment_data(seg_len: usize, s: &str) -> Result<SegmentData, ParseE
         .map(|s| u8::from_str_radix(s, 16).unwrap())
         .collect();
     if x.len() != seg_len {
-        println!("{} {}", x.len(), seg_len);
-        println!("{}", String::from("99 01 20 08 01 6A 44 76 22 32 63 A3 A8 0E 13 A2 5D FA 00 8E 37 63 40 67 03 A7 FF BB 16 C6 F7 FC 41 BD 49 D3 FC 64 DB C7 F0 D7 2C 32 FF C6 7F F1 1C E6").split_whitespace().collect::<Vec<&str>>().len());
         return Err(ParseError::SegmentDataLengthMismatch);
     } else {
         return Ok(SegmentData(x));
