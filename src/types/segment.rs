@@ -33,7 +33,7 @@ pub enum SegmentName {
 pub enum SegmentDescr {
     R, // readable
     W, // writable
-    P, // oresebt in the object file
+    P, // present in the object file
 }
 
 #[derive(Debug)]
