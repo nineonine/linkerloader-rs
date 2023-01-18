@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use linkerloader::types::errors::ParseError;
 use linkerloader::types::object::MAGIC_NUMBER;
 use linkerloader::types::segment::{SegmentName, SegmentDescr};
@@ -119,10 +120,12 @@ fn segments() {
             assert_eq!(obj.nsegs, obj.segments.len() as i32);
             let seg1 = &obj.segments[0];
             assert_eq!(SegmentName::TEXT, seg1.segment_name);
-            assert_eq!(4096, seg1.segment_start); // 1000 decimal
-            assert_eq!(9472, seg1.segment_len); // 2500 decimal
+            assert_eq!(0x0, seg1.segment_start);
+            assert_eq!(0x32, seg1.segment_len);
             assert_eq!(SegmentDescr::R, seg1.segment_descr[0]);
             assert_eq!(SegmentDescr::P, seg1.segment_descr[1]);
+            assert_eq!(0x32, obj.object_data[0].deref().len());
+            assert_eq!(0x46, obj.object_data[2].deref().len());
         }
     }
 }
@@ -168,14 +171,15 @@ fn symbol_table() {
             assert_eq!(obj.nsyms, obj.symbol_table.len() as i32);
             let ste1: &STE = &obj.symbol_table[0];
             assert_eq!("foo", ste1.st_name);
-            assert_eq!(0x38d, ste1.st_value);
+            assert_eq!(0x1a, ste1.st_value);
             assert_eq!(1, ste1.st_seg); // 2500 decimal
             assert_eq!(SymbolTableEntryType::D, ste1.st_type);
             let ste2: &STE= &obj.symbol_table[1];
             assert_eq!("bas", ste2.st_name);
-            assert_eq!(0x25a, ste2.st_value);
+            assert_eq!(0x2b, ste2.st_value);
             assert_eq!(0, ste2.st_seg); // 2500 decimal
             assert_eq!(SymbolTableEntryType::U, ste2.st_type);
+            assert_eq!(0x40, obj.object_data[0].deref().len());
         }
     }
 }
@@ -230,15 +234,31 @@ fn relocations() {
         Ok(obj) => {
             assert_eq!(obj.nrels, obj.relocations.len() as i32);
             let rel1: &Relocation = &obj.relocations[0];
-            assert_eq!(0x5dc, rel1.rel_loc);
+            assert_eq!(0x14, rel1.rel_loc);
             assert_eq!(SegmentName::TEXT, rel1.rel_seg);
             assert_eq!(RelRef::SymbolRef(1), rel1.rel_ref);
             assert_eq!(RelType::R(4), rel1.rel_type);
             let rel2: &Relocation= &obj.relocations[1];
-            assert_eq!(0x3f2, rel2.rel_loc);
+            assert_eq!(0x1a, rel2.rel_loc);
             assert_eq!(SegmentName::TEXT, rel2.rel_seg);
             assert_eq!(RelRef::SymbolRef(2), rel2.rel_ref);
             assert_eq!(RelType::R(4), rel2.rel_type);
+            assert_eq!(0x33, obj.object_data[0].deref().len());
         }
     }
+}
+
+#[test]
+fn invalid_object_data() {
+    test_failure(ParseError::InvalidObjectData, &tests_base_loc("invalid_object_data"));
+}
+
+#[test]
+fn segment_data_len_mismatch() {
+    test_failure(ParseError::SegmentDataLengthMismatch, &tests_base_loc("segment_data_len_mismatch"));
+}
+
+#[test]
+fn segment_data_out_of_bounds() {
+    test_failure(ParseError::SegmentDataOutOfBounds, &tests_base_loc("segment_data_out_of_bounds"));
 }

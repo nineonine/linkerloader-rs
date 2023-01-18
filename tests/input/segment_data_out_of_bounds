@@ -1,0 +1,5 @@
+LINK
+1 0 0
+.text 0 5 RP
+A8 A6 8A AD 9F
+FF FF

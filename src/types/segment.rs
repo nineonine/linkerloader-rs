@@ -1,3 +1,4 @@
+use std::ops::Deref;
 use crate::types::errors::ParseError;
 
 // Each segment definition contains the
@@ -33,6 +34,15 @@ pub enum SegmentDescr {
     R, // readable
     W, // writable
     P, // oresebt in the object file
+}
+
+#[derive(Debug)]
+pub struct SegmentData(Vec<u8>);
+impl Deref for SegmentData {
+    type Target = Vec<u8>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 pub fn parse_segment(s: &str) -> Result<Segment, ParseError> {
@@ -85,5 +95,18 @@ fn segment_descr_from_chr(c: char) -> Result<SegmentDescr, ParseError> {
         'W' => Ok(SegmentDescr::W),
         'P' => Ok(SegmentDescr::P),
         _   => Err(ParseError::InvalidSegmentDescr),
+    }
+}
+
+pub fn parse_segment_data(seg_len: usize, s: &str) -> Result<SegmentData, ParseError> {
+    let x: Vec<u8> = s.split_whitespace()
+        .map(|s| u8::from_str_radix(s, 16).unwrap())
+        .collect();
+    if x.len() != seg_len {
+        println!("{} {}", x.len(), seg_len);
+        println!("{}", String::from("99 01 20 08 01 6A 44 76 22 32 63 A3 A8 0E 13 A2 5D FA 00 8E 37 63 40 67 03 A7 FF BB 16 C6 F7 FC 41 BD 49 D3 FC 64 DB C7 F0 D7 2C 32 FF C6 7F F1 1C E6").split_whitespace().collect::<Vec<&str>>().len());
+        return Err(ParseError::SegmentDataLengthMismatch);
+    } else {
+        return Ok(SegmentData(x));
     }
 }

@@ -1,6 +1,6 @@
 use std::num::ParseIntError;
 
-use crate::types::segment::{Segment, parse_segment};
+use crate::types::segment::{Segment, SegmentData, parse_segment, parse_segment_data};
 use crate::types::symbol_table::{STE, parse_symbol_table_entry};
 use crate::types::relocation::{Relocation, parse_relocation};
 use crate::types::errors::ParseError;
@@ -13,6 +13,7 @@ pub struct ObjectFile {
     pub segments: Vec<Segment>,
     pub symbol_table: Vec<STE>,
     pub relocations: Vec<Relocation>,
+    pub object_data: Vec<SegmentData>,
 }
 
 pub const MAGIC_NUMBER: &'static str = "LINK";
@@ -124,6 +125,27 @@ pub fn parse_object_file(file_contents: String) -> Result<ObjectFile, ParseError
         }
     }
 
+    // parse object_data
+    let mut seg_data: Vec<SegmentData> = vec![];
+    for i in 0..nsegs {
+        match input.next() {
+            Some(s) => {
+                println!("{:?}", segments[i as usize]);
+                let seg_len = segments[i as usize].segment_len as usize;
+                match parse_segment_data(seg_len, s) {
+                    Ok(sd) => seg_data.push(sd),
+                    Err(e) => return Err(e),
+                }
+            },
+            None => return Err(ParseError::InvalidObjectData),
+        }
+    }
+    let object_data: Vec<SegmentData> = seg_data;
+    // more data than nsegs - error out
+    if let Some(_) = input.next() {
+        return Err(ParseError::SegmentDataOutOfBounds);
+    }
+
     return Ok(ObjectFile {
         nsegs,
         nsyms,
@@ -131,5 +153,6 @@ pub fn parse_object_file(file_contents: String) -> Result<ObjectFile, ParseError
         segments,
         symbol_table,
         relocations,
+        object_data,
     });
 }

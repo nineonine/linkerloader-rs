@@ -33,4 +33,8 @@ pub enum ParseError {
     InvalidRelType,
     InvalidRelSegment,
     InvalidNumOfRelocations,
+
+    InvalidObjectData,
+    SegmentDataLengthMismatch,
+    SegmentDataOutOfBounds,
 }
