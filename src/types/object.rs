@@ -8,7 +8,7 @@ use crate::types::relocation::{Relocation, parse_relocation};
 use crate::types::errors::ParseError;
 
 #[derive(Debug)]
-pub struct ObjectFile {
+pub struct ObjectIn {
     pub nsegs: i32,
     pub nsyms: i32,
     pub nrels: i32,
@@ -20,7 +20,7 @@ pub struct ObjectFile {
 
 pub const MAGIC_NUMBER: &'static str = "LINK";
 
-pub fn parse_object_file(file_contents: String) -> Result<ObjectFile, ParseError> {
+pub fn parse_object_file(file_contents: String) -> Result<ObjectIn, ParseError> {
 
     let mut input: Peekable<Lines> = file_contents.lines().peekable();
 
@@ -130,7 +130,7 @@ pub fn parse_object_file(file_contents: String) -> Result<ObjectFile, ParseError
         return Err(ParseError::SegmentDataOutOfBounds);
     }
 
-    return Ok(ObjectFile {
+    return Ok(ObjectIn {
         nsegs,
         nsyms,
         nrels,

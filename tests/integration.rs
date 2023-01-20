@@ -4,7 +4,7 @@ use linkerloader::types::object::MAGIC_NUMBER;
 use linkerloader::types::segment::{SegmentName, SegmentDescr};
 use linkerloader::types::symbol_table::{STE, SymbolTableEntryType};
 use linkerloader::types::relocation::{Relocation, RelRef, RelType};
-use linkerloader::lib::read_object;
+use linkerloader::lib::parse_object;
 use linkerloader::utils::read_object_file;
 
 const TESTS_DIR: &'static str = "tests/input/";
@@ -17,7 +17,7 @@ fn test_magic_number_simple() {
 }
 
 fn test_failure(e0: ParseError, fp: &str) {
-    let res = read_object(fp);
+    let res = parse_object(fp);
     if res.is_ok() {
         println!("{:?}", res);
         assert!(res.is_err());
@@ -111,7 +111,7 @@ fn invalid_num_of_segs_4() {
 
 #[test]
 fn segments() {
-    let res = read_object(&tests_base_loc("segments_1"));
+    let res = parse_object(&tests_base_loc("segments_1"));
     println!("{:?}", res);
     assert!(res.is_ok());
     match res {
@@ -162,7 +162,7 @@ fn non_zero_segment_for_undefined_ste() {
 
 #[test]
 fn symbol_table() {
-    let res = read_object(&tests_base_loc("symbol_table_1"));
+    let res = parse_object(&tests_base_loc("symbol_table_1"));
     println!("{:?}", res);
     assert!(res.is_ok());
     match res {
@@ -226,7 +226,7 @@ fn invalid_num_of_relocations_2() {
 
 #[test]
 fn relocations() {
-    let res = read_object(&tests_base_loc("relocations_1"));
+    let res = parse_object(&tests_base_loc("relocations_1"));
     println!("{:?}", res);
     assert!(res.is_ok());
     match res {
