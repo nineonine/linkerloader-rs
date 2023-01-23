@@ -11,7 +11,7 @@ const TESTS_DIR: &'static str = "tests/input/";
 
 #[test]
 fn test_magic_number_simple() {
-    let obj_file = read_object_file("tests/input/simple");
+    let obj_file = read_object_file(&tests_base_loc("simple"));
     let magic_number = obj_file.lines().next().unwrap();
     assert_eq!(MAGIC_NUMBER, magic_number);
 }
