@@ -20,6 +20,21 @@ pub struct ObjectIn {
 
 pub const MAGIC_NUMBER: &'static str = "LINK";
 
+impl ObjectIn {
+
+    pub fn ppr(&self) -> String {
+        let mut s = String::new();
+        s.push_str(MAGIC_NUMBER);s.push_str("\n");
+        s.push_str(format!("{:X} {:X} {:X}\n", self.nsegs, self.nsyms, self.nrels).as_str());
+        let mut segs = vec![];
+        for seg in self.segments.iter() {
+            segs.push(format!("{} {:X} {:X}", seg.segment_name, seg.segment_start, seg.segment_len))
+        }
+        s.push_str(segs.join("\n").as_str());
+        s
+    }
+}
+
 pub fn parse_object_file(file_contents: String) -> Result<ObjectIn, ParseError> {
 
     let mut input: Peekable<Lines> = file_contents.lines().peekable();
@@ -114,7 +129,7 @@ pub fn parse_object_file(file_contents: String) -> Result<ObjectIn, ParseError> 
     for i in 0..nsegs {
         match input.next() {
             Some(s) => {
-                println!("{:?}", segments[i as usize]);
+                // println!("{:?}", segments[i as usize]);
                 let seg_len = segments[i as usize].segment_len as usize;
                 match parse_segment_data(seg_len, s) {
                     Ok(sd) => seg_data.push(sd),

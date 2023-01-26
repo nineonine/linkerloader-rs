@@ -1,4 +1,5 @@
 use std::ops::Deref;
+use std::fmt;
 use crate::types::errors::ParseError;
 
 // Each segment definition contains the
@@ -12,7 +13,7 @@ use crate::types::errors::ParseError;
 //   .bss 5000 1900 RW
 // Segments are numbered in the order their definitions appear, with the first
 // segment being number 1.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Segment {
     pub segment_name: SegmentName,
     pub segment_start: i32,
@@ -20,27 +21,60 @@ pub struct Segment {
     pub segment_descr: Vec<SegmentDescr>, // TODO: ensure uniqueness when parsing
 }
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+impl Segment {
+    pub fn new(segment_name: SegmentName) -> Segment {
+        Segment {
+            segment_name,
+            segment_start: 0,
+            segment_len: 0,
+            segment_descr: vec![]
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Hash, Clone, Ord, PartialOrd)]
 pub enum SegmentName {
     TEXT,
     DATA,
     BSS,
-    CUSTOM(String),
 }
 
-#[derive(Debug, Eq, PartialEq)]
+impl fmt::Display for SegmentName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let segment_name_str = match self {
+            SegmentName::TEXT => "TEXT",
+            SegmentName::DATA => "DATA",
+            SegmentName::BSS => "BSS",
+        };
+        write!(f, "{}", segment_name_str.to_string())
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum SegmentDescr {
     R, // readable
     W, // writable
     P, // present in the object file
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SegmentData(Vec<u8>);
 impl Deref for SegmentData {
     type Target = Vec<u8>;
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl SegmentData {
+    pub fn concat(&self, other: &SegmentData) -> SegmentData {
+        let mut new_vec = self.0.clone();
+        new_vec.extend_from_slice(&other.0);
+        SegmentData(new_vec)
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 }
 
@@ -56,9 +90,7 @@ pub fn parse_segment(s: &str) -> Result<Segment, ParseError> {
                 ".text" => { segment_name = SegmentName::TEXT },
                 ".data" => { segment_name = SegmentName::DATA },
                 ".bss" =>  { segment_name = SegmentName::BSS },
-                s =>
-                    if s.starts_with(".") { segment_name = SegmentName::CUSTOM(String::from(s)) }
-                    else { return Err(ParseError::InvalidSegmentName); }
+                _ => return Err(ParseError::InvalidSegmentName),
             }
             match i32::from_str_radix(start, 16) {
                 Err(_) => return Err(ParseError::InvalidSegmentStart),

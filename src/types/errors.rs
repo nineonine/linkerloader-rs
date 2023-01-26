@@ -38,3 +38,9 @@ pub enum ParseError {
     SegmentDataLengthMismatch,
     SegmentDataOutOfBounds,
 }
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum LinkError {
+    UnexpectedLinkError,
+    DuplicateObjectError,
+}

@@ -1,9 +1,13 @@
 use std::ops::Deref;
+use std::fs;
+use std::collections::BTreeMap;
+// use linkerloader::gen::gen_obj_data;
 use linkerloader::types::errors::ParseError;
-use linkerloader::types::object::MAGIC_NUMBER;
+use linkerloader::types::object::{MAGIC_NUMBER, ObjectIn, parse_object_file};
 use linkerloader::types::segment::{SegmentName, SegmentDescr};
 use linkerloader::types::symbol_table::{STE, SymbolTableEntryType};
 use linkerloader::types::relocation::{Relocation, RelRef, RelType};
+use linkerloader::linker::editor::{LinkerEditor};
 use linkerloader::lib::parse_object;
 use linkerloader::utils::read_object_file;
 
@@ -30,8 +34,55 @@ fn test_failure(e0: ParseError, fp: &str) {
     }
 }
 
+fn multi_object_test(dirname: &str) {
+    let objects = read_objects_from_dir(&tests_base_loc(dirname));
+    let mut editor = LinkerEditor::new(0x100, 0x100, 0x4, false);
+    match editor.link(objects) {
+        Ok((out, _info)) => {
+            assert_eq!(out.nsegs as usize, out.segments.len());
+            assert_eq!(out.object_data.len(), out.segments.len());
+            let text_seg = out.segments.get(&SegmentName::TEXT).unwrap_or_else(|| panic!("failed to get text segment"));
+            let text_seg_data = out.object_data.get(&SegmentName::TEXT).unwrap_or_else(|| panic!("failed to get text code / data"));
+            assert_eq!(text_seg.segment_len as usize, text_seg_data.len());
+            let data_seg = out.segments.get(&SegmentName::DATA).unwrap_or_else(|| panic!("failed to get data segment"));
+            let data_seg_data = out.object_data.get(&SegmentName::DATA).unwrap_or_else(|| panic!("failed to get data code / data"));
+            assert_eq!(data_seg.segment_len as usize, data_seg_data.len());
+            let bss_seg = out.segments.get(&SegmentName::BSS).unwrap_or_else(|| panic!("failed to get bss segment"));
+            let bss_seg_data = out.object_data.get(&SegmentName::BSS).unwrap_or_else(|| panic!("failed to get bss code / data"));
+            assert_eq!(bss_seg.segment_len as usize, bss_seg_data.len());
+        },
+        Err(_e) => panic!("{}", dirname),
+    }
+}
+
 fn tests_base_loc(filename: &str) -> String {
     format!("{}{}", TESTS_DIR, filename)
+}
+
+fn read_objects_from_dir(dirname: &str) -> BTreeMap<String, ObjectIn> {
+    let mut objects = BTreeMap::new();
+
+     let mut entries = fs::read_dir(dirname)
+                                                        .unwrap()
+                                                        .filter_map(|entry| entry.ok())
+                                                        .collect::<Vec<_>>();
+     entries.sort_by_key(|entry| entry.file_name());
+     for entry in entries {
+        let path = entry.path();
+
+        if path.is_file() && !path.file_name().unwrap().to_str().unwrap().ends_with("_out") {
+            let file_contents = fs::read_to_string(&path).unwrap();
+            let file_name = path.file_name().unwrap().to_str().unwrap().to_string();
+            println!("reading {}", file_name.as_str());
+            match parse_object_file(file_contents) {
+                Ok(object) => {
+                    objects.insert(file_name, object);
+                },
+                Err(err) => panic!("read_objects_from_dir: {:?}", err),
+            }
+        }
+    }
+    objects
 }
 
 #[test]
@@ -261,4 +312,14 @@ fn segment_data_len_mismatch() {
 #[test]
 fn segment_data_out_of_bounds() {
     test_failure(ParseError::SegmentDataOutOfBounds, &tests_base_loc("segment_data_out_of_bounds"));
+}
+
+#[test]
+fn link_1() {
+    multi_object_test("link_1");
+}
+
+#[test]
+fn link_2() {
+    multi_object_test("link_2");
 }
