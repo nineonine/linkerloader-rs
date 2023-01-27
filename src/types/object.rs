@@ -3,7 +3,7 @@ use std::iter::Peekable;
 use std::str::Lines;
 
 use crate::types::segment::{Segment, SegmentData, parse_segment, parse_segment_data};
-use crate::types::symbol_table::{STE, parse_symbol_table_entry};
+use crate::types::symbol_table::{SymbolTableEntry, parse_symbol_table_entry};
 use crate::types::relocation::{Relocation, parse_relocation};
 use crate::types::errors::ParseError;
 
@@ -13,7 +13,7 @@ pub struct ObjectIn {
     pub nsyms: i32,
     pub nrels: i32,
     pub segments: Vec<Segment>,
-    pub symbol_table: Vec<STE>,
+    pub symbol_table: Vec<SymbolTableEntry>,
     pub relocations: Vec<Relocation>,
     pub object_data: Vec<SegmentData>,
 }
@@ -83,7 +83,7 @@ pub fn parse_object_file(file_contents: String) -> Result<ObjectIn, ParseError> 
     }
 
     // parse symbol table
-    let mut stes: Vec<STE> = vec![];
+    let mut stes: Vec<SymbolTableEntry> = vec![];
     for _ in 0..nsyms {
         match input.next() {
             Some(s) => {
@@ -95,7 +95,7 @@ pub fn parse_object_file(file_contents: String) -> Result<ObjectIn, ParseError> 
             None => return Err(ParseError::InvalidNumOfSTEs),
         }
     }
-    let symbol_table: Vec<STE> = stes;
+    let symbol_table: Vec<SymbolTableEntry> = stes;
     // more segments than nsegs - error out
     if let Some(&l) = input.peek() {
         if parse_symbol_table_entry(nsegs, l).is_ok() {

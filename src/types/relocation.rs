@@ -1,6 +1,6 @@
 use crate::types::errors::ParseError;
 use crate::types::segment::{SegmentName, Segment};
-use crate::types::symbol_table::{STE};
+use crate::types::symbol_table::{SymbolTableEntry};
 
 // Relocations, example:
 //   loc seg ref type ...
@@ -35,7 +35,7 @@ pub enum RelType {
     R(i32),
 }
 
-pub fn parse_relocation(segs: &[Segment], st: &[STE], s: &str) -> Result<Relocation, ParseError> {
+pub fn parse_relocation(segs: &[Segment], st: &[SymbolTableEntry], s: &str) -> Result<Relocation, ParseError> {
     let rel_loc;
     let rel_seg;
     let rel_ref;

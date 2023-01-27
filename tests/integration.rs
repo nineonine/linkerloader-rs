@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use linkerloader::types::errors::ParseError;
 use linkerloader::types::object::{MAGIC_NUMBER, ObjectIn, parse_object_file};
 use linkerloader::types::segment::{SegmentName, SegmentDescr};
-use linkerloader::types::symbol_table::{STE, SymbolTableEntryType};
+use linkerloader::types::symbol_table::{SymbolTableEntry, SymbolTableEntryType};
 use linkerloader::types::relocation::{Relocation, RelRef, RelType};
 use linkerloader::linker::editor::{LinkerEditor};
 use linkerloader::lib::parse_object;
@@ -207,11 +207,6 @@ fn invalid_symbol_table_segment_out_of_range() {
 }
 
 #[test]
-fn non_zero_segment_for_undefined_ste() {
-    test_failure(ParseError::NonZeroSegmentForUndefinedSTE, &tests_base_loc("non_zero_segment_for_undefined_ste"));
-}
-
-#[test]
 fn symbol_table() {
     let res = parse_object(&tests_base_loc("symbol_table_1"));
     println!("{:?}", res);
@@ -220,12 +215,12 @@ fn symbol_table() {
         Err(_) => panic!("unexpected"),
         Ok(obj) => {
             assert_eq!(obj.nsyms, obj.symbol_table.len() as i32);
-            let ste1: &STE = &obj.symbol_table[0];
+            let ste1: &SymbolTableEntry = &obj.symbol_table[0];
             assert_eq!("foo", ste1.st_name);
             assert_eq!(0x1a, ste1.st_value);
             assert_eq!(1, ste1.st_seg); // 2500 decimal
             assert_eq!(SymbolTableEntryType::D, ste1.st_type);
-            let ste2: &STE= &obj.symbol_table[1];
+            let ste2: &SymbolTableEntry= &obj.symbol_table[1];
             assert_eq!("bas", ste2.st_name);
             assert_eq!(0x2b, ste2.st_value);
             assert_eq!(0, ste2.st_seg); // 2500 decimal
@@ -322,4 +317,40 @@ fn link_1() {
 #[test]
 fn link_2() {
     multi_object_test("link_2");
+}
+
+#[test]
+fn common_block_1() {
+    let dirname = "common_block_1";
+    let objects = read_objects_from_dir(&tests_base_loc(dirname));
+    let mut editor = LinkerEditor::new(0x10, 0x10, 0x4, false);
+    match editor.link(objects) {
+        Ok((out, info)) => {
+            assert_eq!(3, info.common_block_mapping.len());
+            assert_eq!(out.object_data.len(), out.segments.len());
+            let bss_seg = out.segments.get(&SegmentName::BSS).unwrap_or_else(|| panic!("failed to get bss segment"));
+            let bss_seg_data = out.object_data.get(&SegmentName::BSS).unwrap_or_else(|| panic!("failed to get bss code / data"));
+            let common_block: i32 = info.common_block_mapping.values().sum();
+            assert_eq!(bss_seg.segment_len as usize, bss_seg_data.len() + common_block as usize);
+        },
+        Err(_e) => panic!("{}", dirname),
+    }
+}
+
+#[test]
+fn common_block_bigger_size() {
+    let dirname = "common_block_bigger_size";
+    let objects = read_objects_from_dir(&tests_base_loc(dirname));
+    let mut editor = LinkerEditor::new(0x10, 0x10, 0x4, false);
+    match editor.link(objects) {
+        Ok((out, info)) => {
+            assert_eq!(1, info.common_block_mapping.len());
+            assert_eq!(out.nsegs as usize, out.segments.len());
+            let bss_seg = out.segments.get(&SegmentName::BSS).unwrap_or_else(|| panic!("failed to get bss segment"));
+            let common_block: i32 = info.common_block_mapping.values().sum();
+            assert_eq!(bss_seg.segment_len as usize, 0xA);
+            assert_eq!(common_block, 0xA);
+        },
+        Err(_e) => panic!("{}", dirname),
+    }
 }

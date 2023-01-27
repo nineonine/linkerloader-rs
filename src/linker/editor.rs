@@ -1,20 +1,25 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use crate::types::errors::LinkError;
 use crate::types::object::ObjectIn;
 use crate::types::out::ObjectOut;
-use crate::types::segment::{SegmentName};
+use crate::types::segment::{Segment, SegmentName};
+use crate::types::symbol_table::{SymbolName};
 use crate::logger::*;
 use crate::utils::find_seg_start;
 
 pub struct LinkerInfo {
-    pub segment_mapping: BTreeMap<ObjectID, BTreeMap<SegmentName, i32>>
+    pub segment_mapping: BTreeMap<ObjectID, BTreeMap<SegmentName, i32>>,
+    pub common_block_mapping: HashMap<SymbolName, i32>,
 }
 
 impl LinkerInfo {
-    pub fn new(segment_mapping: BTreeMap<ObjectID, BTreeMap<SegmentName, i32>>) -> LinkerInfo {
+    pub fn new() -> LinkerInfo {
+        let segment_mapping = BTreeMap::new();
+        let common_block_mapping = HashMap::new();
         LinkerInfo {
-            segment_mapping
+            segment_mapping,
+            common_block_mapping
         }
     }
 
@@ -70,7 +75,7 @@ impl LinkerEditor {
     //   * update address mappings in link_info
     pub fn link(&mut self, objects: BTreeMap<ObjectID, ObjectIn>) -> Result<(ObjectOut, LinkerInfo), LinkError> {
         let mut out = ObjectOut::new();
-        let mut info = LinkerInfo::new(BTreeMap::new());
+        let mut info = LinkerInfo::new();
         for (obj_id, obj) in objects.iter() {
             self.logger.debug(&format!("==> {}\n{}", obj_id, obj.ppr().as_str()));
             let mut seg_offsets = BTreeMap::new();
@@ -85,7 +90,6 @@ impl LinkerEditor {
 
                     })
                     .or_insert_with(|| {
-                        self.logger.debug(&format!("Segment {} not found. Adding", segment.segment_name));
                         out.nsegs = out.nsegs + 1;
                         seg_offsets.insert(segment.segment_name.clone(), 0);
                         let mut s = segment.clone();
@@ -102,6 +106,20 @@ impl LinkerEditor {
                     });
             }
             info.segment_mapping.insert(obj_id.to_string(), seg_offsets);
+            // common blocks
+            for ste in obj.symbol_table.iter() {
+                if ste.is_common_block() {
+                    info.common_block_mapping.entry(ste.st_name.clone())
+                            .and_modify({|size| {
+                                if ste.st_value > *size {
+                                    self.logger.debug(format!( "Adding comon block for symbol {} with size: {}"
+                                                                  , ste.st_name, ste.st_value).as_str());
+                                    *size = ste.st_value;
+                                }
+                            }})
+                            .or_insert(ste.st_value);
+                }
+            }
         }
 
         self.logger.debug(format!("Object out (initial allocation):\n{}", out.ppr()).as_str());
@@ -144,6 +162,27 @@ impl LinkerEditor {
         }
         self.logger.debug(format!("Object out (segment offset patching):\n{}", out.ppr()).as_str());
         self.logger.debug(format!("Info (segment offset patching):\n{}", info.ppr()).as_str());
+
+        // Implement Unix-style common blocks. That is, scan the symbol table for undefined symbols
+        // with non-zero values, and add space of appropriate size to the .bss segment.
+        let common_block = info.common_block_mapping.values().sum();
+        if common_block != 0 {
+            self.logger.debug(format!("Appending common block of size {:X} to BSS:", common_block).as_str());
+            out.segments.entry(SegmentName::BSS)
+                        .and_modify(|seg| {
+                            seg.segment_len += common_block;
+                        })
+                        .or_insert_with(|| {
+                            let mut seg = Segment::new(SegmentName::BSS);
+                            seg.segment_start = bss_start;
+                            seg.segment_len = common_block;
+                            out.nsegs += 1;
+                            seg
+                        });
+            self.logger.debug(format!("Object out (common block allocation):\n{}", out.ppr()).as_str());
+        }
+
+
         /////////////////////////////////////////////
         self.logger.debug("Linking complete");
         self.logger.debug(format!("Object out (final):\n{}", out.ppr()).as_str());

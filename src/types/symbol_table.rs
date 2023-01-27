@@ -1,19 +1,31 @@
 use super::errors::ParseError;
 
+pub type SymbolName = String;
 // Symbol table entry. Each entry is of the form:
 //   name value seg type
 // The name is the symbol name. The value is the hex value of the symbol.
-// Seg is the segment number relative to which the segment is defined, or 0
+// Seg is the segment number relative to which the symbol is defined, or 0
 // for absolute or undefined symbols. The type is a string of letters including
 // D for defined or U for undefined. Symbols are also numbered in the order
 // they are listed, starting at 1.
 #[derive(Debug)]
-pub struct STE {
-    pub st_name: String,
+pub struct SymbolTableEntry {
+    pub st_name: SymbolName,
+    pub st_value: i32, // for local defined symbols - segment offset
+                       // for common blocks - size to be appened to BSS
+                       // for global undefined symbols - always zero
     pub st_seg: i32,
     pub st_type: SymbolTableEntryType,
-    pub st_value: i32, // the book assignment is a bit vague (at least for someone who does
-                       // not yet fully understand the nomenclature and intricacies of linking...)
+}
+
+impl SymbolTableEntry {
+    pub fn is_common_block(&self) -> bool {
+        if self.st_type == SymbolTableEntryType::U
+            && self.st_value != 0 {
+                return true
+            }
+        return false
+    }
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -22,7 +34,7 @@ pub enum SymbolTableEntryType {
     U, // undefined
 }
 
-pub fn parse_symbol_table_entry(nsegs: i32, s: &str) -> Result<STE, ParseError> {
+pub fn parse_symbol_table_entry(nsegs: i32, s: &str) -> Result<SymbolTableEntry, ParseError> {
     let st_name;
     let st_value;
     let st_seg;
@@ -48,14 +60,11 @@ pub fn parse_symbol_table_entry(nsegs: i32, s: &str) -> Result<STE, ParseError> 
                 "U" => st_type = SymbolTableEntryType::U,
                 _ => return Err(ParseError::InvalidSTEType)
             }
-            if st_type == SymbolTableEntryType::U && st_seg != 0 {
-                return Err(ParseError::NonZeroSegmentForUndefinedSTE);
-            }
         },
         _otherwise => return Err(ParseError::InvalidSymbolTableEntry)
     }
 
-    Ok(STE{
+    Ok(SymbolTableEntry{
         st_name,
         st_value,
         st_seg,
