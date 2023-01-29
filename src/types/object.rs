@@ -15,6 +15,12 @@ pub struct ObjectIn {
     pub segments: Vec<Segment>,
     pub symbol_table: Vec<SymbolTableEntry>,
     pub relocations: Vec<Relocation>,
+    // Following the relocations comes the object data. The data for each segment
+    // is a single long hex string followed by a newline. (This makes it
+    // easy to read and write section data in perl.) Each pair of hex digits
+    // represents one byte. The segment data strings are in the same order as
+    // the segment table, and there must be segment data for each "present" segment.
+    // The length of the hex string is determined by the the defined length of the
     pub object_data: Vec<SegmentData>,
 }
 

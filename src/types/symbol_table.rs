@@ -8,7 +8,7 @@ pub type SymbolName = String;
 // for absolute or undefined symbols. The type is a string of letters including
 // D for defined or U for undefined. Symbols are also numbered in the order
 // they are listed, starting at 1.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SymbolTableEntry {
     pub st_name: SymbolName,
     pub st_value: i32, // for local defined symbols - segment offset
@@ -26,9 +26,13 @@ impl SymbolTableEntry {
             }
         return false
     }
+
+    pub fn is_defined(&self) -> bool {
+        self.st_type == SymbolTableEntryType::D
+    }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum SymbolTableEntryType {
     D, // defined
     U, // undefined

@@ -333,7 +333,7 @@ fn common_block_1() {
             let common_block: i32 = info.common_block_mapping.values().sum();
             assert_eq!(bss_seg.segment_len as usize, bss_seg_data.len() + common_block as usize);
         },
-        Err(_e) => panic!("{}", dirname),
+        Err(e) => panic!("{}: {:?}", dirname, e),
     }
 }
 

@@ -9,12 +9,6 @@ use crate::types::symbol_table::{SymbolTableEntry};
 // and type is an architecture-dependent relocation type. Common types are
 // A4 for a four-byte absolute address, or R4 for a four-byte relative address.
 // Some relocation types may have extra fields after the type.
-// Following the relocations comes the object data. The data for each segment
-// is a single long hex string followed by a newline. (This makes it
-// easy to read and write section data in perl.) Each pair of hex digits
-// represents one byte. The segment data strings are in the same order as
-// the segment table, and there must be segment data for each "present" segment.
-// The length of the hex string is determined by the the defined length of the
 #[derive(Debug)]
 pub struct Relocation {
     pub rel_loc: i32, // relocation address
@@ -25,8 +19,8 @@ pub struct Relocation {
 
 #[derive(Debug, Eq, PartialEq)]
 pub enum RelRef {
-    SegmentRef(i32),
-    SymbolRef(i32),
+    SegmentRef(usize),
+    SymbolRef(usize),
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -57,7 +51,7 @@ pub fn parse_relocation(segs: &[Segment], st: &[SymbolTableEntry], s: &str) -> R
                     }
                 },
             }
-            match i32::from_str_radix(_ref, 16) {
+            match usize::from_str_radix(_ref, 16) {
                 Err(_) => return Err(ParseError::InvalidRelRef),
                 Ok(i) => {
                     match st.get((i-1) as usize) {

@@ -42,4 +42,5 @@ pub enum ParseError {
 pub enum LinkError {
     UnexpectedLinkError,
     DuplicateObjectError,
+    MultipleSymbolDefinitions,
 }

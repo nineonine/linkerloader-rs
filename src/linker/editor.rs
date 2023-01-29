@@ -4,22 +4,31 @@ use crate::types::errors::LinkError;
 use crate::types::object::ObjectIn;
 use crate::types::out::ObjectOut;
 use crate::types::segment::{Segment, SegmentName};
-use crate::types::symbol_table::{SymbolName};
+use crate::types::symbol_table::{SymbolName, SymbolTableEntry};
 use crate::logger::*;
 use crate::utils::find_seg_start;
+
+type Defn = (ObjectID, usize);
+type Refs = HashMap<ObjectID, usize>;
 
 pub struct LinkerInfo {
     pub segment_mapping: BTreeMap<ObjectID, BTreeMap<SegmentName, i32>>,
     pub common_block_mapping: HashMap<SymbolName, i32>,
+    pub symbol_tables: HashMap<ObjectID, Vec<SymbolTableEntry>>,
+    pub global_symtable: HashMap<SymbolName, (Option<Defn>, Refs)>,
 }
 
 impl LinkerInfo {
     pub fn new() -> LinkerInfo {
         let segment_mapping = BTreeMap::new();
         let common_block_mapping = HashMap::new();
+        let symbol_tables = HashMap::new();
+        let global_symtable = HashMap::new();
         LinkerInfo {
             segment_mapping,
-            common_block_mapping
+            common_block_mapping,
+            symbol_tables,
+            global_symtable,
         }
     }
 
@@ -105,6 +114,39 @@ impl LinkerEditor {
                         return obj.object_data[i].clone();
                     });
             }
+
+            // build symbol tables
+            info.symbol_tables.insert(obj_id.to_string(), obj.symbol_table.clone());
+            // global symtable updates
+            for (i,symbol) in obj.symbol_table.iter().enumerate() {
+                // skip common blocks!
+                if symbol.is_common_block() {continue};
+                // if symbol already defined in global table - error out
+                if symbol.is_defined()
+                    && info.global_symtable.contains_key(&symbol.st_name) {
+                        return Err(LinkError::MultipleSymbolDefinitions)
+                }
+                info.global_symtable
+                    .entry(symbol.st_name.to_string())
+                    .and_modify(|(defn, refs)| {
+                        if symbol.is_defined() {
+                            assert!(defn.is_none());
+                            *defn = Some((obj_id.to_string(), i));
+                        } else {
+                            refs.insert(obj_id.to_string(), i);
+                        }
+                    })
+                    .or_insert_with(|| {
+                        if symbol.is_defined() {
+                            (Some((obj_id.to_string(), i)), HashMap::new())
+                        } else {
+                            let mut refs = HashMap::new();
+                            refs.insert(obj_id.to_string(), i);
+                            (None, refs)
+                        }
+                    });
+            }
+
             info.segment_mapping.insert(obj_id.to_string(), seg_offsets);
             // common blocks
             for ste in obj.symbol_table.iter() {
