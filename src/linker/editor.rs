@@ -96,62 +96,20 @@ impl LinkerEditor {
         self.logger.debug(format!("Info (initial allocation):\n{}", info.ppr()).as_str());
 
         // update TEXT start and patch segment addrs in link info
-        out.segments.entry(SegmentName::TEXT)
-                    .and_modify(|s| s.segment_start = self.text_start);
-        for (_, addrs) in info.segment_mapping.iter_mut() {
-            addrs.entry(SegmentName::TEXT)
-                 .and_modify(|addr| {
-                    *addr = *addr + self.text_start;
-                 });
-        }
+        self.patch_text_seg(&mut out, &mut info);
 
         // now do the same patching in DATA segment - update start and adjust address in info
-        let text_end = out.segments.get(&SegmentName::TEXT).unwrap().segment_start
-                          + out.segments.get(&SegmentName::TEXT).unwrap().segment_len;
-        let data_start = find_seg_start(text_end, self.data_start_boundary);
-        out.segments.entry(SegmentName::DATA)
-                    .and_modify(|s| s.segment_start = data_start);
-        for (_, addrs) in info.segment_mapping.iter_mut() {
-            addrs.entry(SegmentName::DATA)
-                 .and_modify(|addr| {
-                    *addr = *addr + data_start;
-                 });
-        }
+        self.patch_data_seg(&mut out, &mut info);
 
-        // now BSS
-        let data_end = out.segments.get(&SegmentName::DATA).unwrap().segment_start
-                          + out.segments.get(&SegmentName::DATA).unwrap().segment_len;
-        let bss_start = find_seg_start(data_end, self.bss_start_boundary);
-        out.segments.entry(SegmentName::BSS)
-                    .and_modify(|s| s.segment_start = bss_start);
-        for (_, addrs) in info.segment_mapping.iter_mut() {
-            addrs.entry(SegmentName::BSS)
-                 .and_modify(|addr| {
-                    *addr = *addr + bss_start;
-                 });
-        }
+        // now BSS. We might reuse the returned value in case we need to allocate common block
+        let bss_start = self.patch_bss_seg(&mut out, &mut info);
+
         self.logger.debug(format!("Object out (segment offset patching):\n{}", out.ppr()).as_str());
         self.logger.debug(format!("Info (segment offset patching):\n{}", info.ppr()).as_str());
 
         // Implement Unix-style common blocks. That is, scan the symbol table for undefined symbols
         // with non-zero values, and add space of appropriate size to the .bss segment.
-        let common_block = info.common_block_mapping.values().sum();
-        if common_block != 0 {
-            self.logger.debug(format!("Appending common block of size {:X} to BSS:", common_block).as_str());
-            out.segments.entry(SegmentName::BSS)
-                        .and_modify(|seg| {
-                            seg.segment_len += common_block;
-                        })
-                        .or_insert_with(|| {
-                            let mut seg = Segment::new(SegmentName::BSS);
-                            seg.segment_start = bss_start;
-                            seg.segment_len = common_block;
-                            out.nsegs += 1;
-                            seg
-                        });
-            self.logger.debug(format!("Object out (common block allocation):\n{}", out.ppr()).as_str());
-        }
-
+        self.common_block_allocation(&mut out, &mut info, bss_start);
 
         /////////////////////////////////////////////
         self.logger.debug("Linking complete");
@@ -191,35 +149,9 @@ impl LinkerEditor {
             }
 
             // build symbol tables
-            info.symbol_tables.insert(obj_id.to_string(), obj.symbol_table.clone());
-            // global symtable updates
-            for (i,symbol) in obj.symbol_table.iter().enumerate() {
-                // skip common blocks!
-                if symbol.is_common_block() {continue};
-                // if symbol already defined in global table - error out
-                if symbol.is_defined()
-                    && info.global_symtable.contains_key(&symbol.st_name) {
-                        return Err(LinkError::MultipleSymbolDefinitions)
-                }
-                info.global_symtable
-                    .entry(symbol.st_name.to_string())
-                    .and_modify(|(defn, refs)| {
-                        if symbol.is_defined() {
-                            assert!(defn.is_none());
-                            *defn = Some((obj_id.to_string(), i));
-                        } else {
-                            refs.insert(obj_id.to_string(), i);
-                        }
-                    })
-                    .or_insert_with(|| {
-                        if symbol.is_defined() {
-                            (Some((obj_id.to_string(), i)), HashMap::new())
-                        } else {
-                            let mut refs = HashMap::new();
-                            refs.insert(obj_id.to_string(), i);
-                            (None, refs)
-                        }
-                    });
+            match self.build_symbol_tables(info, &obj, &obj_id) {
+                Some(err) => return Err(err),
+                None => {},
             }
 
             info.segment_mapping.insert(obj_id.to_string(), seg_offsets);
@@ -239,5 +171,98 @@ impl LinkerEditor {
             }
         }
         Ok(())
+    }
+
+    fn build_symbol_tables(&mut self, info: &mut LinkerInfo, obj: &ObjectIn, obj_id: &str) -> Option<LinkError> {
+        info.symbol_tables.insert(obj_id.to_string(), obj.symbol_table.clone());
+        // global symtable updates
+        for (i,symbol) in obj.symbol_table.iter().enumerate() {
+            // skip common blocks!
+            if symbol.is_common_block() {continue};
+            // if symbol already defined in global table - error out
+            if symbol.is_defined()
+                && info.global_symtable.contains_key(&symbol.st_name) {
+                    return Some(LinkError::MultipleSymbolDefinitions)
+            }
+            info.global_symtable
+                .entry(symbol.st_name.to_string())
+                .and_modify(|(defn, refs)| {
+                    if symbol.is_defined() {
+                        assert!(defn.is_none());
+                        *defn = Some((obj_id.to_string(), i));
+                    } else {
+                        refs.insert(obj_id.to_string(), i);
+                    }
+                })
+                .or_insert_with(|| {
+                    if symbol.is_defined() {
+                        (Some((obj_id.to_string(), i)), HashMap::new())
+                    } else {
+                        let mut refs = HashMap::new();
+                        refs.insert(obj_id.to_string(), i);
+                        (None, refs)
+                    }
+                });
+        }
+        None
+    }
+
+    fn patch_text_seg(&mut self, out: &mut ObjectOut, info: &mut LinkerInfo) {
+        out.segments.entry(SegmentName::TEXT)
+                    .and_modify(|s| s.segment_start = self.text_start);
+        for (_, addrs) in info.segment_mapping.iter_mut() {
+            addrs.entry(SegmentName::TEXT)
+                 .and_modify(|addr| {
+                    *addr = *addr + self.text_start;
+                 });
+        }
+    }
+
+    fn patch_data_seg(&mut self, out: &mut ObjectOut, info: &mut LinkerInfo) {
+        let text_end = out.segments.get(&SegmentName::TEXT).unwrap().segment_start
+                          + out.segments.get(&SegmentName::TEXT).unwrap().segment_len;
+        let data_start = find_seg_start(text_end, self.data_start_boundary);
+        out.segments.entry(SegmentName::DATA)
+                    .and_modify(|s| s.segment_start = data_start);
+        for (_, addrs) in info.segment_mapping.iter_mut() {
+            addrs.entry(SegmentName::DATA)
+                 .and_modify(|addr| {
+                    *addr = *addr + data_start;
+                 });
+        }
+    }
+
+    fn patch_bss_seg(&mut self, out: &mut ObjectOut, info: &mut LinkerInfo) -> i32 {
+        let data_end = out.segments.get(&SegmentName::DATA).unwrap().segment_start
+                          + out.segments.get(&SegmentName::DATA).unwrap().segment_len;
+        let bss_start = find_seg_start(data_end, self.bss_start_boundary);
+        out.segments.entry(SegmentName::BSS)
+                    .and_modify(|s| s.segment_start = bss_start);
+        for (_, addrs) in info.segment_mapping.iter_mut() {
+            addrs.entry(SegmentName::BSS)
+                 .and_modify(|addr| {
+                    *addr = *addr + bss_start;
+                 });
+        }
+        bss_start
+    }
+
+    fn common_block_allocation(&mut self, out: &mut ObjectOut, info: &mut LinkerInfo, bss_start: i32) {
+        let common_block = info.common_block_mapping.values().sum();
+        if common_block != 0 {
+            self.logger.debug(format!("Appending common block of size {:X} to BSS:", common_block).as_str());
+            out.segments.entry(SegmentName::BSS)
+                        .and_modify(|seg| {
+                            seg.segment_len += common_block;
+                        })
+                        .or_insert_with(|| {
+                            let mut seg = Segment::new(SegmentName::BSS);
+                            seg.segment_start = bss_start;
+                            seg.segment_len = common_block;
+                            out.nsegs += 1;
+                            seg
+                        });
+            self.logger.debug(format!("Object out (common block allocation):\n{}", out.ppr()).as_str());
+        }
     }
 }
