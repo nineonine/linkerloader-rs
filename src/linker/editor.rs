@@ -78,6 +78,7 @@ impl LinkerEditor {
         r.print_linker_editor_cfg();
         return r;
     }
+
     // for each object_in
     // for each segment in object_in
     //   * allocate storage in object_out
@@ -85,6 +86,80 @@ impl LinkerEditor {
     pub fn link(&mut self, objects: BTreeMap<ObjectID, ObjectIn>) -> Result<(ObjectOut, LinkerInfo), LinkError> {
         let mut out = ObjectOut::new();
         let mut info = LinkerInfo::new();
+
+        match self.allocate_storage(objects, &mut out, &mut info) {
+            Err(e) => return Err(e),
+            Ok(_) => {},
+        }
+
+        self.logger.debug(format!("Object out (initial allocation):\n{}", out.ppr()).as_str());
+        self.logger.debug(format!("Info (initial allocation):\n{}", info.ppr()).as_str());
+
+        // update TEXT start and patch segment addrs in link info
+        out.segments.entry(SegmentName::TEXT)
+                    .and_modify(|s| s.segment_start = self.text_start);
+        for (_, addrs) in info.segment_mapping.iter_mut() {
+            addrs.entry(SegmentName::TEXT)
+                 .and_modify(|addr| {
+                    *addr = *addr + self.text_start;
+                 });
+        }
+
+        // now do the same patching in DATA segment - update start and adjust address in info
+        let text_end = out.segments.get(&SegmentName::TEXT).unwrap().segment_start
+                          + out.segments.get(&SegmentName::TEXT).unwrap().segment_len;
+        let data_start = find_seg_start(text_end, self.data_start_boundary);
+        out.segments.entry(SegmentName::DATA)
+                    .and_modify(|s| s.segment_start = data_start);
+        for (_, addrs) in info.segment_mapping.iter_mut() {
+            addrs.entry(SegmentName::DATA)
+                 .and_modify(|addr| {
+                    *addr = *addr + data_start;
+                 });
+        }
+
+        // now BSS
+        let data_end = out.segments.get(&SegmentName::DATA).unwrap().segment_start
+                          + out.segments.get(&SegmentName::DATA).unwrap().segment_len;
+        let bss_start = find_seg_start(data_end, self.bss_start_boundary);
+        out.segments.entry(SegmentName::BSS)
+                    .and_modify(|s| s.segment_start = bss_start);
+        for (_, addrs) in info.segment_mapping.iter_mut() {
+            addrs.entry(SegmentName::BSS)
+                 .and_modify(|addr| {
+                    *addr = *addr + bss_start;
+                 });
+        }
+        self.logger.debug(format!("Object out (segment offset patching):\n{}", out.ppr()).as_str());
+        self.logger.debug(format!("Info (segment offset patching):\n{}", info.ppr()).as_str());
+
+        // Implement Unix-style common blocks. That is, scan the symbol table for undefined symbols
+        // with non-zero values, and add space of appropriate size to the .bss segment.
+        let common_block = info.common_block_mapping.values().sum();
+        if common_block != 0 {
+            self.logger.debug(format!("Appending common block of size {:X} to BSS:", common_block).as_str());
+            out.segments.entry(SegmentName::BSS)
+                        .and_modify(|seg| {
+                            seg.segment_len += common_block;
+                        })
+                        .or_insert_with(|| {
+                            let mut seg = Segment::new(SegmentName::BSS);
+                            seg.segment_start = bss_start;
+                            seg.segment_len = common_block;
+                            out.nsegs += 1;
+                            seg
+                        });
+            self.logger.debug(format!("Object out (common block allocation):\n{}", out.ppr()).as_str());
+        }
+
+
+        /////////////////////////////////////////////
+        self.logger.debug("Linking complete");
+        self.logger.debug(format!("Object out (final):\n{}", out.ppr()).as_str());
+        Ok((out, info))
+    }
+
+    fn allocate_storage(&mut self, objects: BTreeMap<ObjectID, ObjectIn>, out: &mut ObjectOut, info: &mut LinkerInfo) -> Result<(), LinkError> {
         for (obj_id, obj) in objects.iter() {
             self.logger.debug(&format!("==> {}\n{}", obj_id, obj.ppr().as_str()));
             let mut seg_offsets = BTreeMap::new();
@@ -163,71 +238,6 @@ impl LinkerEditor {
                 }
             }
         }
-
-        self.logger.debug(format!("Object out (initial allocation):\n{}", out.ppr()).as_str());
-        self.logger.debug(format!("Info (initial allocation):\n{}", info.ppr()).as_str());
-
-        // update TEXT start and patch segment addrs in link info
-        out.segments.entry(SegmentName::TEXT)
-                    .and_modify(|s| s.segment_start = self.text_start);
-        for (_, addrs) in info.segment_mapping.iter_mut() {
-            addrs.entry(SegmentName::TEXT)
-                 .and_modify(|addr| {
-                    *addr = *addr + self.text_start;
-                 });
-        }
-
-        // now do the same patching in DATA segment - update start and adjust address in info
-        let text_end = out.segments.get(&SegmentName::TEXT).unwrap().segment_start
-                          + out.segments.get(&SegmentName::TEXT).unwrap().segment_len;
-        let data_start = find_seg_start(text_end, self.data_start_boundary);
-        out.segments.entry(SegmentName::DATA)
-                    .and_modify(|s| s.segment_start = data_start);
-        for (_, addrs) in info.segment_mapping.iter_mut() {
-            addrs.entry(SegmentName::DATA)
-                 .and_modify(|addr| {
-                    *addr = *addr + data_start;
-                 });
-        }
-
-        // now BSS
-        let data_end = out.segments.get(&SegmentName::DATA).unwrap().segment_start
-                          + out.segments.get(&SegmentName::DATA).unwrap().segment_len;
-        let bss_start = find_seg_start(data_end, self.bss_start_boundary);
-        out.segments.entry(SegmentName::BSS)
-                    .and_modify(|s| s.segment_start = bss_start);
-        for (_, addrs) in info.segment_mapping.iter_mut() {
-            addrs.entry(SegmentName::BSS)
-                 .and_modify(|addr| {
-                    *addr = *addr + bss_start;
-                 });
-        }
-        self.logger.debug(format!("Object out (segment offset patching):\n{}", out.ppr()).as_str());
-        self.logger.debug(format!("Info (segment offset patching):\n{}", info.ppr()).as_str());
-
-        // Implement Unix-style common blocks. That is, scan the symbol table for undefined symbols
-        // with non-zero values, and add space of appropriate size to the .bss segment.
-        let common_block = info.common_block_mapping.values().sum();
-        if common_block != 0 {
-            self.logger.debug(format!("Appending common block of size {:X} to BSS:", common_block).as_str());
-            out.segments.entry(SegmentName::BSS)
-                        .and_modify(|seg| {
-                            seg.segment_len += common_block;
-                        })
-                        .or_insert_with(|| {
-                            let mut seg = Segment::new(SegmentName::BSS);
-                            seg.segment_start = bss_start;
-                            seg.segment_len = common_block;
-                            out.nsegs += 1;
-                            seg
-                        });
-            self.logger.debug(format!("Object out (common block allocation):\n{}", out.ppr()).as_str());
-        }
-
-
-        /////////////////////////////////////////////
-        self.logger.debug("Linking complete");
-        self.logger.debug(format!("Object out (final):\n{}", out.ppr()).as_str());
-        Ok((out, info))
+        Ok(())
     }
 }
