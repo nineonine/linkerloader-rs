@@ -87,7 +87,7 @@ impl LinkerEditor {
         let mut out = ObjectOut::new();
         let mut info = LinkerInfo::new();
 
-        match self.allocate_storage(objects, &mut out, &mut info) {
+        match self.alloc_storage_and_symtables(objects, &mut out, &mut info) {
             Err(e) => return Err(e),
             Ok(_) => {},
         }
@@ -117,7 +117,8 @@ impl LinkerEditor {
         Ok((out, info))
     }
 
-    fn allocate_storage(&mut self, objects: BTreeMap<ObjectID, ObjectIn>, out: &mut ObjectOut, info: &mut LinkerInfo) -> Result<(), LinkError> {
+    // Allocate storage and build symbol tables
+    fn alloc_storage_and_symtables(&mut self, objects: BTreeMap<ObjectID, ObjectIn>, out: &mut ObjectOut, info: &mut LinkerInfo) -> Result<(), LinkError> {
         for (obj_id, obj) in objects.iter() {
             self.logger.debug(&format!("==> {}\n{}", obj_id, obj.ppr().as_str()));
             let mut seg_offsets = BTreeMap::new();
@@ -170,6 +171,13 @@ impl LinkerEditor {
                 }
             }
         }
+        // Check for undefined symbols
+        if info.global_symtable
+               .values()
+               .any(|(defn,_)| defn.is_none()) {
+                   return Err(LinkError::UndefinedSymbolError)
+               }
+
         Ok(())
     }
 
@@ -204,12 +212,6 @@ impl LinkerEditor {
                         (None, refs)
                     }
                 });
-        }
-        // Check for undefined symbols
-        if info.global_symtable
-               .values()
-               .any(|(defn,_)| defn.is_none()) {
-            return Some(LinkError::UndefinedSymbolError)
         }
         None
     }
