@@ -49,7 +49,7 @@ impl Logger {
             LogLevel::Warn => "[WARN]".to_string().yellow(),
             LogLevel::Error => "[ERROR]".to_string().red(),
         };
-        println! {"{}: {}", pref, msg};
+        println! {"{pref}: {msg}"};
         if self.logger_ty == LoggerType::TestLogger {
             self.push(lvl, msg);
         }

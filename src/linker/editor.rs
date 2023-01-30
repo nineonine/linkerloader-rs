@@ -48,7 +48,7 @@ impl LinkerInfo {
             entry.push_str(format!("  {} =>", &obj_id).as_str());
             for s_n in segment_order.iter() {
                 if let Some(addr) = seg_addrs.get(s_n) {
-                    entry.push_str(format!(" {}: {:X}", s_n, addr).as_str());
+                    entry.push_str(format!(" {s_n}: {addr:X}").as_str());
                 }
             }
             es.push(entry);
@@ -108,9 +108,7 @@ impl LinkerEditor {
         let mut out = ObjectOut::new();
         let mut info = LinkerInfo::new();
 
-        if let Err(e) = self.alloc_storage_and_symtables(objects, &mut out, &mut info) {
-            return Err(e);
-        }
+        self.alloc_storage_and_symtables(objects, &mut out, &mut info)?;
 
         self.logger
             .debug(format!("Object out (initial allocation):\n{}", out.ppr()).as_str());
@@ -320,9 +318,8 @@ impl LinkerEditor {
     ) {
         let common_block = info.common_block_mapping.values().sum();
         if common_block != 0 {
-            self.logger.debug(
-                format!("Appending common block of size {:X} to BSS:", common_block).as_str(),
-            );
+            self.logger
+                .debug(format!("Appending common block of size {common_block:X} to BSS:").as_str());
             out.segments
                 .entry(SegmentName::BSS)
                 .and_modify(|seg| {

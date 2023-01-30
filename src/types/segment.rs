@@ -46,7 +46,7 @@ impl fmt::Display for SegmentName {
             SegmentName::DATA => "DATA",
             SegmentName::BSS => "BSS",
         };
-        write!(f, "{}", segment_name_str)
+        write!(f, "{segment_name_str}")
     }
 }
 

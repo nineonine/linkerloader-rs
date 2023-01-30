@@ -56,7 +56,7 @@ pub fn parse_relocation(
             match usize::from_str_radix(_ref, 16) {
                 Err(_) => return Err(ParseError::InvalidRelRef),
                 Ok(i) => {
-                    match st.get((i - 1) as usize) {
+                    match st.get(i - 1) {
                         None => return Err(ParseError::RelSymbolOutOfRange),
                         // for now just always assume relocation refs are symbols
                         Some(_) => rel_ref = RelRef::SymbolRef(i),

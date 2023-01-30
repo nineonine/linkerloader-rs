@@ -45,7 +45,7 @@ impl fmt::Display for SymbolTableEntryType {
             SymbolTableEntryType::D => "D",
             SymbolTableEntryType::U => "U",
         };
-        write!(f, "{}", segment_name_str)
+        write!(f, "{segment_name_str}")
     }
 }
 

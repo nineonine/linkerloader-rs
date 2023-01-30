@@ -27,6 +27,7 @@ jobs:
           cargo --version --verbose
           rustc --version
           cargo clippy --version
+          cargo fmt --version
 
     - name: Lint
       run: |
