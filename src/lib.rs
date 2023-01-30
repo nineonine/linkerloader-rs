@@ -1,13 +1,13 @@
-pub mod utils;
-pub mod types;
 pub mod gen;
-pub mod logger;
 pub mod linker;
+pub mod logger;
+pub mod types;
+pub mod utils;
 
 pub mod lib {
 
-    use crate::types::object::{ObjectIn,parse_object_file};
     use crate::types::errors::ParseError;
+    use crate::types::object::{parse_object_file, ObjectIn};
     use crate::utils::read_object_file;
 
     pub fn parse_object(fp: &str) -> Result<ObjectIn, ParseError> {

@@ -1,11 +1,11 @@
-use std::num::ParseIntError;
 use std::iter::Peekable;
+use std::num::ParseIntError;
 use std::str::Lines;
 
-use crate::types::segment::{Segment, SegmentData, parse_segment, parse_segment_data};
-use crate::types::symbol_table::{SymbolTableEntry, parse_symbol_table_entry};
-use crate::types::relocation::{Relocation, parse_relocation};
 use crate::types::errors::ParseError;
+use crate::types::relocation::{parse_relocation, Relocation};
+use crate::types::segment::{parse_segment, parse_segment_data, Segment, SegmentData};
+use crate::types::symbol_table::{parse_symbol_table_entry, SymbolTableEntry};
 
 #[derive(Debug)]
 pub struct ObjectIn {
@@ -27,18 +27,24 @@ pub struct ObjectIn {
 pub const MAGIC_NUMBER: &'static str = "LINK";
 
 impl ObjectIn {
-
     pub fn ppr(&self) -> String {
         let mut s = String::new();
-        s.push_str(MAGIC_NUMBER);s.push_str("\n");
+        s.push_str(MAGIC_NUMBER);
+        s.push_str("\n");
         s.push_str(format!("{:X} {:X} {:X}\n", self.nsegs, self.nsyms, self.nrels).as_str());
         let mut segs = vec![];
         for seg in self.segments.iter() {
-            segs.push(format!("{} {:X} {:X}", seg.segment_name, seg.segment_start, seg.segment_len))
+            segs.push(format!(
+                "{} {:X} {:X}",
+                seg.segment_name, seg.segment_start, seg.segment_len
+            ))
         }
         let mut stes = vec![];
         for ste in self.symbol_table.iter() {
-            stes.push(format!("{} {:X} {:X} {}", ste.st_name, ste.st_value, ste.st_seg, ste.st_type))
+            stes.push(format!(
+                "{} {:X} {:X} {}",
+                ste.st_name, ste.st_value, ste.st_seg, ste.st_type
+            ))
         }
         s.push_str(stes.join("\n").as_str());
         s
@@ -46,15 +52,16 @@ impl ObjectIn {
 }
 
 pub fn parse_object_file(file_contents: String) -> Result<ObjectIn, ParseError> {
-
     let mut input: Peekable<Lines> = file_contents.lines().peekable();
 
     // magic number check
     match input.next() {
         None => return Err(ParseError::MissingMagicNumber),
         Some(mn) => {
-            if mn != MAGIC_NUMBER {return Err(ParseError::InvalidMagicNumber)}
-            else {}
+            if mn != MAGIC_NUMBER {
+                return Err(ParseError::InvalidMagicNumber);
+            } else {
+            }
         }
     }
 
@@ -75,11 +82,9 @@ pub fn parse_object_file(file_contents: String) -> Result<ObjectIn, ParseError> 
     let mut segs: Vec<Segment> = vec![];
     for _ in 0..nsegs {
         match input.next() {
-            Some(s) => {
-                match parse_segment(s) {
-                    Ok(seg) => segs.push(seg),
-                    Err(e) => return Err(e),
-                }
+            Some(s) => match parse_segment(s) {
+                Ok(seg) => segs.push(seg),
+                Err(e) => return Err(e),
             },
             None => return Err(ParseError::InvalidNumOfSegments),
         }
@@ -96,11 +101,9 @@ pub fn parse_object_file(file_contents: String) -> Result<ObjectIn, ParseError> 
     let mut stes: Vec<SymbolTableEntry> = vec![];
     for _ in 0..nsyms {
         match input.next() {
-            Some(s) => {
-                match parse_symbol_table_entry(nsegs, s) {
-                    Ok(ste) => stes.push(ste),
-                    Err(e) => return Err(e),
-                }
+            Some(s) => match parse_symbol_table_entry(nsegs, s) {
+                Ok(ste) => stes.push(ste),
+                Err(e) => return Err(e),
             },
             None => return Err(ParseError::InvalidNumOfSTEs),
         }
@@ -117,11 +120,9 @@ pub fn parse_object_file(file_contents: String) -> Result<ObjectIn, ParseError> 
     let mut rels: Vec<Relocation> = vec![];
     for _ in 0..nrels {
         match input.next() {
-            Some(s) => {
-                match parse_relocation(&segments, &symbol_table, s) {
-                    Ok(rel) => rels.push(rel),
-                    Err(e) => return Err(e),
-                }
+            Some(s) => match parse_relocation(&segments, &symbol_table, s) {
+                Ok(rel) => rels.push(rel),
+                Err(e) => return Err(e),
             },
             None => return Err(ParseError::InvalidNumOfRelocations),
         }
@@ -145,7 +146,7 @@ pub fn parse_object_file(file_contents: String) -> Result<ObjectIn, ParseError> 
                     Ok(sd) => seg_data.push(sd),
                     Err(e) => return Err(e),
                 }
-            },
+            }
             None => return Err(ParseError::InvalidObjectData),
         }
     }
@@ -173,10 +174,10 @@ fn parse_nsegs_nsyms_nrels(input: &mut Peekable<Lines>) -> Result<(i32, i32, i32
     match input.next() {
         None => return Err(ParseError::MissingNSegsNSumsNRels),
         Some(vals) => {
-            let vs: Vec<Result<i32, ParseIntError>> =
-                    vals.split_whitespace()
-                        .map(|x| i32::from_str_radix(x, 16))
-                        .collect();
+            let vs: Vec<Result<i32, ParseIntError>> = vals
+                .split_whitespace()
+                .map(|x| i32::from_str_radix(x, 16))
+                .collect();
             match vs.as_slice() {
                 [n_segs, n_syms, n_rels] => {
                     match n_segs {
@@ -191,8 +192,8 @@ fn parse_nsegs_nsyms_nrels(input: &mut Peekable<Lines>) -> Result<(i32, i32, i32
                         Ok(v) => nrels = *v,
                         Err(_) => return Err(ParseError::InvalidNRelsValue),
                     }
-                },
-                _otherwise => return Err(ParseError::InvalidNSegsNSumsNRels)
+                }
+                _otherwise => return Err(ParseError::InvalidNSegsNSumsNRels),
             }
         }
     }

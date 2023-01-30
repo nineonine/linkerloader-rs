@@ -1,6 +1,6 @@
-use std::ops::Deref;
-use std::fmt;
 use crate::types::errors::ParseError;
+use std::fmt;
+use std::ops::Deref;
 
 // Each segment definition contains the
 // segment name, the address where the segment logically starts, the length
@@ -17,7 +17,7 @@ use crate::types::errors::ParseError;
 pub struct Segment {
     pub segment_name: SegmentName,
     pub segment_start: i32,
-    pub segment_len: i32, // bytes
+    pub segment_len: i32,                 // bytes
     pub segment_descr: Vec<SegmentDescr>, // TODO: ensure uniqueness when parsing
 }
 
@@ -27,7 +27,7 @@ impl Segment {
             segment_name,
             segment_start: 0,
             segment_len: 0,
-            segment_descr: vec![]
+            segment_descr: vec![],
         }
     }
 }
@@ -87,9 +87,9 @@ pub fn parse_segment(s: &str) -> Result<Segment, ParseError> {
     match vs.as_slice() {
         [name, start, len, descr] => {
             match *name {
-                ".text" => { segment_name = SegmentName::TEXT },
-                ".data" => { segment_name = SegmentName::DATA },
-                ".bss" =>  { segment_name = SegmentName::BSS },
+                ".text" => segment_name = SegmentName::TEXT,
+                ".data" => segment_name = SegmentName::DATA,
+                ".bss" => segment_name = SegmentName::BSS,
                 _ => return Err(ParseError::InvalidSegmentName),
             }
             match i32::from_str_radix(start, 16) {
@@ -108,8 +108,8 @@ pub fn parse_segment(s: &str) -> Result<Segment, ParseError> {
                 }
             }
             segment_descr = descrs;
-        },
-        _otherwise => return Err(ParseError::InvalidSegment)
+        }
+        _otherwise => return Err(ParseError::InvalidSegment),
     }
 
     return Ok(Segment {
@@ -117,7 +117,7 @@ pub fn parse_segment(s: &str) -> Result<Segment, ParseError> {
         segment_start,
         segment_len,
         segment_descr,
-    })
+    });
 }
 
 fn segment_descr_from_chr(c: char) -> Result<SegmentDescr, ParseError> {
@@ -125,12 +125,13 @@ fn segment_descr_from_chr(c: char) -> Result<SegmentDescr, ParseError> {
         'R' => Ok(SegmentDescr::R),
         'W' => Ok(SegmentDescr::W),
         'P' => Ok(SegmentDescr::P),
-        _   => Err(ParseError::InvalidSegmentDescr),
+        _ => Err(ParseError::InvalidSegmentDescr),
     }
 }
 
 pub fn parse_segment_data(seg_len: usize, s: &str) -> Result<SegmentData, ParseError> {
-    let x: Vec<u8> = s.split_whitespace()
+    let x: Vec<u8> = s
+        .split_whitespace()
         .map(|s| u8::from_str_radix(s, 16).unwrap())
         .collect();
     if x.len() != seg_len {

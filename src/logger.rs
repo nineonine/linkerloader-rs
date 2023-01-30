@@ -3,17 +3,21 @@ use colored::Colorize;
 pub struct Logger {
     logger_ty: LoggerType,
     log_entries: Vec<(LogLevel, String)>,
-    pub silent: bool
+    pub silent: bool,
 }
 
 #[derive(Eq, PartialEq)]
 enum LoggerType {
-    StdOut, TestLogger
+    StdOut,
+    TestLogger,
 }
 
 #[allow(dead_code)]
 pub enum LogLevel {
-    Info, Warn, Debug, Error
+    Info,
+    Warn,
+    Debug,
+    Error,
 }
 
 impl Logger {
@@ -45,7 +49,7 @@ impl Logger {
             LogLevel::Warn => format!("[WARN]").yellow(),
             LogLevel::Error => format!("[ERROR]").red(),
         };
-        println!{"{}: {}", pref, msg};
+        println! {"{}: {}", pref, msg};
         if self.logger_ty == LoggerType::TestLogger {
             self.push(lvl, msg);
         }
@@ -55,5 +59,4 @@ impl Logger {
     pub fn debug(&mut self, msg: &str) {
         self.do_log(LogLevel::Debug, msg);
     }
-
 }

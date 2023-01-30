@@ -1,6 +1,6 @@
 use crate::types::errors::ParseError;
-use crate::types::segment::{SegmentName, Segment};
-use crate::types::symbol_table::{SymbolTableEntry};
+use crate::types::segment::{Segment, SegmentName};
+use crate::types::symbol_table::SymbolTableEntry;
 
 // Relocations, example:
 //   loc seg ref type ...
@@ -29,7 +29,11 @@ pub enum RelType {
     R(i32),
 }
 
-pub fn parse_relocation(segs: &[Segment], st: &[SymbolTableEntry], s: &str) -> Result<Relocation, ParseError> {
+pub fn parse_relocation(
+    segs: &[Segment],
+    st: &[SymbolTableEntry],
+    s: &str,
+) -> Result<Relocation, ParseError> {
     let rel_loc;
     let rel_seg;
     let rel_ref;
@@ -44,22 +48,20 @@ pub fn parse_relocation(segs: &[Segment], st: &[SymbolTableEntry], s: &str) -> R
             }
             match i32::from_str_radix(seg, 16) {
                 Err(_) => return Err(ParseError::InvalidRelSegment),
-                Ok(i) => {
-                    match segs.get((i-1) as usize) {
-                        None => return Err(ParseError::RelSegmentOutOfRange),
-                        Some(s) => rel_seg = s.segment_name.clone(),
-                    }
+                Ok(i) => match segs.get((i - 1) as usize) {
+                    None => return Err(ParseError::RelSegmentOutOfRange),
+                    Some(s) => rel_seg = s.segment_name.clone(),
                 },
             }
             match usize::from_str_radix(_ref, 16) {
                 Err(_) => return Err(ParseError::InvalidRelRef),
                 Ok(i) => {
-                    match st.get((i-1) as usize) {
+                    match st.get((i - 1) as usize) {
                         None => return Err(ParseError::RelSymbolOutOfRange),
                         // for now just always assume relocation refs are symbols
                         Some(_) => rel_ref = RelRef::SymbolRef(i),
                     }
-                },
+                }
             }
             if let Some(c) = ty.chars().next() {
                 match c {
@@ -71,17 +73,16 @@ pub fn parse_relocation(segs: &[Segment], st: &[SymbolTableEntry], s: &str) -> R
                         Ok(i) => rel_type = RelType::A(i),
                         Err(_) => return Err(ParseError::InvalidRelType),
                     },
-                    _ => return Err(ParseError::InvalidRelType)
+                    _ => return Err(ParseError::InvalidRelType),
                 }
             } else {
                 return Err(ParseError::InvalidRelType);
             }
-
-        },
-        _otherwise => return Err(ParseError::InvalidRelocationEntry)
+        }
+        _otherwise => return Err(ParseError::InvalidRelocationEntry),
     }
 
-    Ok(Relocation{
+    Ok(Relocation {
         rel_loc,
         rel_seg,
         rel_ref,

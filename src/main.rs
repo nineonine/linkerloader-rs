@@ -1,7 +1,7 @@
 mod logger;
 
 use linkerloader::types::object::MAGIC_NUMBER;
-use logger::{Logger, LogLevel};
+use logger::{LogLevel, Logger};
 
 fn main() {
     let mut logger = Logger::new_stdout_logger(false);

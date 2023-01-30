@@ -14,19 +14,18 @@ pub type SymbolName = String;
 pub struct SymbolTableEntry {
     pub st_name: SymbolName,
     pub st_value: i32, // for local defined symbols - segment offset
-                       // for common blocks - size to be appened to BSS
-                       // for global undefined symbols - always zero
+    // for common blocks - size to be appened to BSS
+    // for global undefined symbols - always zero
     pub st_seg: i32,
     pub st_type: SymbolTableEntryType,
 }
 
 impl SymbolTableEntry {
     pub fn is_common_block(&self) -> bool {
-        if self.st_type == SymbolTableEntryType::U
-            && self.st_value != 0 {
-                return true
-            }
-        return false
+        if self.st_type == SymbolTableEntryType::U && self.st_value != 0 {
+            return true;
+        }
+        return false;
     }
 
     pub fn is_defined(&self) -> bool {
@@ -67,23 +66,25 @@ pub fn parse_symbol_table_entry(nsegs: i32, s: &str) -> Result<SymbolTableEntry,
             match i32::from_str_radix(seg, 16) {
                 Err(_) => return Err(ParseError::InvalidSTESegment),
                 Ok(i) => {
-                    if i > nsegs { return Err(ParseError::STESegmentRefOutOfRange) }
+                    if i > nsegs {
+                        return Err(ParseError::STESegmentRefOutOfRange);
+                    }
                     st_seg = i;
                 }
             }
             match *ty {
                 "D" => st_type = SymbolTableEntryType::D,
                 "U" => st_type = SymbolTableEntryType::U,
-                _ => return Err(ParseError::InvalidSTEType)
+                _ => return Err(ParseError::InvalidSTEType),
             }
-        },
-        _otherwise => return Err(ParseError::InvalidSymbolTableEntry)
+        }
+        _otherwise => return Err(ParseError::InvalidSymbolTableEntry),
     }
 
-    Ok(SymbolTableEntry{
+    Ok(SymbolTableEntry {
         st_name,
         st_value,
         st_seg,
-        st_type
+        st_type,
     })
 }
