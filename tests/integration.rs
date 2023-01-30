@@ -2,7 +2,7 @@ use std::ops::Deref;
 use std::fs;
 use std::collections::BTreeMap;
 // use linkerloader::gen::gen_obj_data;
-use linkerloader::types::errors::ParseError;
+use linkerloader::types::errors::{ParseError,LinkError};
 use linkerloader::types::object::{MAGIC_NUMBER, ObjectIn, parse_object_file};
 use linkerloader::types::segment::{SegmentName, SegmentDescr};
 use linkerloader::types::symbol_table::{SymbolTableEntry, SymbolTableEntryType};
@@ -379,5 +379,16 @@ fn symbol_name_resolution_1() {
             println!("{:?}", info);
         },
         Err(e) => panic!("{}: {:?}", dirname, e),
+    }
+}
+
+#[test]
+fn multiple_symbol_defns() {
+    let dirname = "multiple_symbol_defns";
+    let objects = read_objects_from_dir(&tests_base_loc(dirname));
+    let mut editor = LinkerEditor::new(0x10, 0x10, 0x4, false);
+    match editor.link(objects) {
+        Err(e) => assert_eq!(LinkError::MultipleSymbolDefinitions, e),
+        _ => panic!("{}", dirname),
     }
 }
