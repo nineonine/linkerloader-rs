@@ -12,6 +12,6 @@ pub mod lib {
 
     pub fn parse_object(fp: &str) -> Result<ObjectIn, ParseError> {
         let file_contents = read_object_file(fp);
-        return parse_object_file(file_contents);
+        parse_object_file(file_contents)
     }
 }

@@ -44,10 +44,10 @@ impl Logger {
 
     pub fn do_log(&mut self, lvl: LogLevel, msg: &str) {
         let pref = match lvl {
-            LogLevel::Info => format!("[INFO]").bold(),
-            LogLevel::Debug => format!("[DEBUG]").dimmed(),
-            LogLevel::Warn => format!("[WARN]").yellow(),
-            LogLevel::Error => format!("[ERROR]").red(),
+            LogLevel::Info => "[INFO]".to_string().bold(),
+            LogLevel::Debug => "[DEBUG]".to_string().dimmed(),
+            LogLevel::Warn => "[WARN]".to_string().yellow(),
+            LogLevel::Error => "[ERROR]".to_string().red(),
         };
         println! {"{}: {}", pref, msg};
         if self.logger_ty == LoggerType::TestLogger {

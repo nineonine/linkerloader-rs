@@ -12,6 +12,12 @@ pub struct ObjectOut {
     pub object_data: BTreeMap<SegmentName, SegmentData>,
 }
 
+impl Default for ObjectOut {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ObjectOut {
     pub fn new() -> ObjectOut {
         ObjectOut {
@@ -47,7 +53,7 @@ impl ObjectOut {
             }
         }
         s.push_str(segs.join("\n").as_str());
-        s.push_str("\n");
+        s.push('\n');
         s.push_str(code_and_data.join("\n").as_str());
         s
     }

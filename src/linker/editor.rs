@@ -18,6 +18,12 @@ pub struct LinkerInfo {
     pub global_symtable: HashMap<SymbolName, (Option<Defn>, Refs)>,
 }
 
+impl Default for LinkerInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LinkerInfo {
     pub fn new() -> LinkerInfo {
         let segment_mapping = BTreeMap::new();
@@ -88,7 +94,7 @@ impl LinkerEditor {
             logger: Logger::new_stdout_logger(silent),
         };
         r.print_linker_editor_cfg();
-        return r;
+        r
     }
 
     // for each object_in
@@ -102,9 +108,8 @@ impl LinkerEditor {
         let mut out = ObjectOut::new();
         let mut info = LinkerInfo::new();
 
-        match self.alloc_storage_and_symtables(objects, &mut out, &mut info) {
-            Err(e) => return Err(e),
-            Ok(_) => {}
+        if let Err(e) = self.alloc_storage_and_symtables(objects, &mut out, &mut info) {
+            return Err(e)
         }
 
         self.logger
@@ -165,7 +170,7 @@ impl LinkerEditor {
                         ));
                     })
                     .or_insert_with(|| {
-                        out.nsegs = out.nsegs + 1;
+                        out.nsegs += 1;
                         seg_offsets.insert(segment.segment_name.clone(), 0);
                         let mut s = segment.clone();
                         s.segment_start = 0;
@@ -178,14 +183,13 @@ impl LinkerEditor {
                         *segment_data = segment_data.concat(&obj.object_data[i]);
                     })
                     .or_insert_with(|| {
-                        return obj.object_data[i].clone();
+                       obj.object_data[i].clone()
                     });
             }
 
             // build symbol tables
-            match self.build_symbol_tables(info, &obj, &obj_id) {
-                Some(err) => return Err(err),
-                None => {}
+            if let Some(err) = self.build_symbol_tables(info, obj, obj_id) {
+                return Err(err)
             }
 
             info.segment_mapping.insert(obj_id.to_string(), seg_offsets);
@@ -276,7 +280,7 @@ impl LinkerEditor {
             .and_modify(|s| s.segment_start = self.text_start);
         for (_, addrs) in info.segment_mapping.iter_mut() {
             addrs.entry(SegmentName::TEXT).and_modify(|addr| {
-                *addr = *addr + self.text_start;
+                *addr += self.text_start;
             });
         }
     }
@@ -290,7 +294,7 @@ impl LinkerEditor {
             .and_modify(|s| s.segment_start = data_start);
         for (_, addrs) in info.segment_mapping.iter_mut() {
             addrs.entry(SegmentName::DATA).and_modify(|addr| {
-                *addr = *addr + data_start;
+                *addr += data_start;
             });
         }
     }
@@ -304,7 +308,7 @@ impl LinkerEditor {
             .and_modify(|s| s.segment_start = bss_start);
         for (_, addrs) in info.segment_mapping.iter_mut() {
             addrs.entry(SegmentName::BSS).and_modify(|addr| {
-                *addr = *addr + bss_start;
+                *addr += bss_start;
             });
         }
         bss_start

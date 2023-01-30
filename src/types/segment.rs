@@ -46,7 +46,7 @@ impl fmt::Display for SegmentName {
             SegmentName::DATA => "DATA",
             SegmentName::BSS => "BSS",
         };
-        write!(f, "{}", segment_name_str.to_string())
+        write!(f, "{}", segment_name_str)
     }
 }
 
@@ -75,6 +75,10 @@ impl SegmentData {
 
     pub fn len(&self) -> usize {
         self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
     }
 }
 
@@ -112,12 +116,12 @@ pub fn parse_segment(s: &str) -> Result<Segment, ParseError> {
         _otherwise => return Err(ParseError::InvalidSegment),
     }
 
-    return Ok(Segment {
+    Ok(Segment {
         segment_name,
         segment_start,
         segment_len,
         segment_descr,
-    });
+    })
 }
 
 fn segment_descr_from_chr(c: char) -> Result<SegmentDescr, ParseError> {
@@ -135,8 +139,8 @@ pub fn parse_segment_data(seg_len: usize, s: &str) -> Result<SegmentData, ParseE
         .map(|s| u8::from_str_radix(s, 16).unwrap())
         .collect();
     if x.len() != seg_len {
-        return Err(ParseError::SegmentDataLengthMismatch);
+        Err(ParseError::SegmentDataLengthMismatch)
     } else {
-        return Ok(SegmentData(x));
+        Ok(SegmentData(x))
     }
 }

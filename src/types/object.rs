@@ -24,13 +24,13 @@ pub struct ObjectIn {
     pub object_data: Vec<SegmentData>,
 }
 
-pub const MAGIC_NUMBER: &'static str = "LINK";
+pub const MAGIC_NUMBER: &str = "LINK";
 
 impl ObjectIn {
     pub fn ppr(&self) -> String {
         let mut s = String::new();
         s.push_str(MAGIC_NUMBER);
-        s.push_str("\n");
+        s.push('\n');
         s.push_str(format!("{:X} {:X} {:X}\n", self.nsegs, self.nsyms, self.nrels).as_str());
         let mut segs = vec![];
         for seg in self.segments.iter() {
@@ -152,11 +152,11 @@ pub fn parse_object_file(file_contents: String) -> Result<ObjectIn, ParseError> 
     }
     let object_data: Vec<SegmentData> = seg_data;
     // more data than nsegs - error out
-    if let Some(_) = input.next() {
+    if input.next().is_some() {
         return Err(ParseError::SegmentDataOutOfBounds);
     }
 
-    return Ok(ObjectIn {
+    Ok(ObjectIn {
         nsegs,
         nsyms,
         nrels,
@@ -164,7 +164,7 @@ pub fn parse_object_file(file_contents: String) -> Result<ObjectIn, ParseError> 
         symbol_table,
         relocations,
         object_data,
-    });
+    })
 }
 
 fn parse_nsegs_nsyms_nrels(input: &mut Peekable<Lines>) -> Result<(i32, i32, i32), ParseError> {

@@ -25,7 +25,7 @@ impl SymbolTableEntry {
         if self.st_type == SymbolTableEntryType::U && self.st_value != 0 {
             return true;
         }
-        return false;
+        false
     }
 
     pub fn is_defined(&self) -> bool {
@@ -45,7 +45,7 @@ impl fmt::Display for SymbolTableEntryType {
             SymbolTableEntryType::D => "D",
             SymbolTableEntryType::U => "U",
         };
-        write!(f, "{}", segment_name_str.to_string())
+        write!(f, "{}", segment_name_str)
     }
 }
 
