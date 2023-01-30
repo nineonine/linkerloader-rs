@@ -109,7 +109,7 @@ impl LinkerEditor {
         let mut info = LinkerInfo::new();
 
         if let Err(e) = self.alloc_storage_and_symtables(objects, &mut out, &mut info) {
-            return Err(e)
+            return Err(e);
         }
 
         self.logger
@@ -182,14 +182,12 @@ impl LinkerEditor {
                     .and_modify(|segment_data| {
                         *segment_data = segment_data.concat(&obj.object_data[i]);
                     })
-                    .or_insert_with(|| {
-                       obj.object_data[i].clone()
-                    });
+                    .or_insert_with(|| obj.object_data[i].clone());
             }
 
             // build symbol tables
             if let Some(err) = self.build_symbol_tables(info, obj, obj_id) {
-                return Err(err)
+                return Err(err);
             }
 
             info.segment_mapping.insert(obj_id.to_string(), seg_offsets);
