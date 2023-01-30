@@ -341,16 +341,27 @@ impl LinkerEditor {
     }
 
     // this assumes all definitions have been spotted and are in place
-    fn resolve_global_sym_offsets(&self, objects: &BTreeMap<ObjectID, ObjectIn>, info: &mut LinkerInfo) {
+    fn resolve_global_sym_offsets(
+        &self,
+        objects: &BTreeMap<ObjectID, ObjectIn>,
+        info: &mut LinkerInfo,
+    ) {
         for (defn, _) in info.global_symtable.values_mut() {
             if let Some((mod_name, ste_i, addr)) = defn {
                 let ste: &SymbolTableEntry = &info.symbol_tables.get(mod_name).unwrap()[*ste_i];
                 assert!(ste.st_seg > 0);
                 let seg_i = ste.st_seg as usize - 1;
                 let sym_seg = &objects.get(mod_name).unwrap().segments[seg_i].segment_name;
-                let segment_offset = *info.segment_mapping.get(mod_name).unwrap().get(&sym_seg).unwrap();
+                let segment_offset = *info
+                    .segment_mapping
+                    .get(mod_name)
+                    .unwrap()
+                    .get(sym_seg)
+                    .unwrap();
                 *addr = Some(segment_offset + ste.st_value);
-            } else {panic!("resolve_global_sym_offsets: undefined symbol")}
+            } else {
+                panic!("resolve_global_sym_offsets: undefined symbol")
+            }
         }
     }
 }

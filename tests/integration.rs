@@ -542,11 +542,35 @@ fn symbol_value_resolution() {
         Ok((_out, info)) => {
             println!("{:?}", info);
             assert_eq!(3, info.global_symtable.len());
-            let foo_abs_addr = info.global_symtable.get("foo").unwrap().0.clone().unwrap().2.unwrap();
+            let foo_abs_addr = info
+                .global_symtable
+                .get("foo")
+                .unwrap()
+                .0
+                .clone()
+                .unwrap()
+                .2
+                .unwrap();
             assert_eq!(0x20, foo_abs_addr);
-            let bar_abs_addr = info.global_symtable.get("bar").unwrap().0.clone().unwrap().2.unwrap();
+            let bar_abs_addr = info
+                .global_symtable
+                .get("bar")
+                .unwrap()
+                .0
+                .clone()
+                .unwrap()
+                .2
+                .unwrap();
             assert_eq!(0x5A + 0x5, bar_abs_addr);
-            let baz_abs_addr = info.global_symtable.get("baz").unwrap().0.clone().unwrap().2.unwrap();
+            let baz_abs_addr = info
+                .global_symtable
+                .get("baz")
+                .unwrap()
+                .0
+                .clone()
+                .unwrap()
+                .2
+                .unwrap();
             assert_eq!(0x78 + 0x2, baz_abs_addr);
         }
         Err(e) => panic!("{}: {:?}", dirname, e),
