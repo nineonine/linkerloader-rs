@@ -8,7 +8,7 @@ use crate::types::segment::{Segment, SegmentName};
 use crate::types::symbol_table::{SymbolName, SymbolTableEntry};
 use crate::utils::find_seg_start;
 
-type Defn = (ObjectID, usize);
+type Defn = (ObjectID, usize, Option<i32>);
 type Refs = HashMap<ObjectID, usize>;
 #[derive(Debug)]
 pub struct LinkerInfo {
@@ -108,7 +108,7 @@ impl LinkerEditor {
         let mut out = ObjectOut::new();
         let mut info = LinkerInfo::new();
 
-        self.alloc_storage_and_symtables(objects, &mut out, &mut info)?;
+        self.alloc_storage_and_symtables(&objects, &mut out, &mut info)?;
 
         self.logger
             .debug(format!("Object out (initial allocation):\n{}", out.ppr()).as_str());
@@ -133,6 +133,9 @@ impl LinkerEditor {
         // with non-zero values, and add space of appropriate size to the .bss segment.
         self.common_block_allocation(&mut out, &mut info, bss_start);
 
+        // resolve global symbols offsets
+        self.resolve_global_sym_offsets(&objects, &mut info);
+
         /////////////////////////////////////////////
         self.logger.debug("Linking complete");
         self.logger
@@ -143,7 +146,7 @@ impl LinkerEditor {
     // Allocate storage and build symbol tables
     fn alloc_storage_and_symtables(
         &mut self,
-        objects: BTreeMap<ObjectID, ObjectIn>,
+        objects: &BTreeMap<ObjectID, ObjectIn>,
         out: &mut ObjectOut,
         info: &mut LinkerInfo,
     ) -> Result<(), LinkError> {
@@ -252,14 +255,14 @@ impl LinkerEditor {
                 .and_modify(|(defn, refs)| {
                     if symbol.is_defined() {
                         assert!(defn.is_none());
-                        *defn = Some((obj_id.to_string(), i));
+                        *defn = Some((obj_id.to_string(), i, None));
                     } else {
                         refs.insert(obj_id.to_string(), i);
                     }
                 })
                 .or_insert_with(|| {
                     if symbol.is_defined() {
-                        (Some((obj_id.to_string(), i)), HashMap::new())
+                        (Some((obj_id.to_string(), i, None)), HashMap::new())
                     } else {
                         let mut refs = HashMap::new();
                         refs.insert(obj_id.to_string(), i);
@@ -334,6 +337,20 @@ impl LinkerEditor {
                 });
             self.logger
                 .debug(format!("Object out (common block allocation):\n{}", out.ppr()).as_str());
+        }
+    }
+
+    // this assumes all definitions have been spotted and are in place
+    fn resolve_global_sym_offsets(&self, objects: &BTreeMap<ObjectID, ObjectIn>, info: &mut LinkerInfo) {
+        for (defn, _) in info.global_symtable.values_mut() {
+            if let Some((mod_name, ste_i, addr)) = defn {
+                let ste: &SymbolTableEntry = &info.symbol_tables.get(mod_name).unwrap()[*ste_i];
+                assert!(ste.st_seg > 0);
+                let seg_i = ste.st_seg as usize - 1;
+                let sym_seg = &objects.get(mod_name).unwrap().segments[seg_i].segment_name;
+                let segment_offset = *info.segment_mapping.get(mod_name).unwrap().get(&sym_seg).unwrap();
+                *addr = Some(segment_offset + ste.st_value);
+            } else {panic!("resolve_global_sym_offsets: undefined symbol")}
         }
     }
 }

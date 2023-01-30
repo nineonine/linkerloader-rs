@@ -495,18 +495,16 @@ fn symbol_name_resolution_1() {
             assert_eq!(2, info.global_symtable.len());
             assert!(info.global_symtable.contains_key("foo"));
             assert!(info.global_symtable.contains_key("bar"));
-            let foo_ste1 = info.global_symtable.get("foo").unwrap().clone();
-            assert_eq!("mod_2", foo_ste1.0.as_ref().unwrap().0);
-            assert_eq!(0, foo_ste1.0.as_ref().unwrap().1);
-            assert!(foo_ste1.1.contains_key("mod_1"));
-            assert_eq!(0, *foo_ste1.1.get("mod_1").unwrap());
-            println!("{:?}", info);
-            let foo_ste2 = info.global_symtable.get("bar").unwrap().clone();
-            assert_eq!("mod_1", foo_ste2.0.as_ref().unwrap().0);
-            assert_eq!(1, foo_ste2.0.as_ref().unwrap().1);
-            assert!(foo_ste2.1.contains_key("mod_2"));
-            assert_eq!(1, *foo_ste2.1.get("mod_2").unwrap());
-            println!("{:?}", info);
+            let foo_ste = info.global_symtable.get("foo").unwrap().clone();
+            assert_eq!("mod_2", foo_ste.0.as_ref().unwrap().0);
+            assert_eq!(0, foo_ste.0.as_ref().unwrap().1);
+            assert!(foo_ste.1.contains_key("mod_1"));
+            assert_eq!(0, *foo_ste.1.get("mod_1").unwrap());
+            let bar_ste = info.global_symtable.get("bar").unwrap().clone();
+            assert_eq!("mod_1", bar_ste.0.as_ref().unwrap().0);
+            assert_eq!(1, bar_ste.0.as_ref().unwrap().1);
+            assert!(bar_ste.1.contains_key("mod_2"));
+            assert_eq!(1, *bar_ste.1.get("mod_2").unwrap());
         }
         Err(e) => panic!("{}: {:?}", dirname, e),
     }
@@ -531,5 +529,26 @@ fn undefined_symbol() {
     match editor.link(objects) {
         Err(e) => assert_eq!(LinkError::UndefinedSymbolError, e),
         _ => panic!("{}", dirname),
+    }
+}
+
+#[test]
+fn symbol_value_resolution() {
+    let dirname = "symbol_value_resolution";
+    let objects = read_objects_from_dir(&tests_base_loc(dirname));
+    let text_start = 0x10;
+    let mut editor = LinkerEditor::new(text_start, 0x10, 0x4, false);
+    match editor.link(objects) {
+        Ok((_out, info)) => {
+            println!("{:?}", info);
+            assert_eq!(3, info.global_symtable.len());
+            let foo_abs_addr = info.global_symtable.get("foo").unwrap().0.clone().unwrap().2.unwrap();
+            assert_eq!(0x20, foo_abs_addr);
+            let bar_abs_addr = info.global_symtable.get("bar").unwrap().0.clone().unwrap().2.unwrap();
+            assert_eq!(0x5A + 0x5, bar_abs_addr);
+            let baz_abs_addr = info.global_symtable.get("baz").unwrap().0.clone().unwrap().2.unwrap();
+            assert_eq!(0x78 + 0x2, baz_abs_addr);
+        }
+        Err(e) => panic!("{}: {:?}", dirname, e),
     }
 }
