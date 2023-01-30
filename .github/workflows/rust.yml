@@ -30,7 +30,6 @@ jobs:
 
     - name: Lint
       run: |
-          cd linkerloader-rs
           cargo fmt -- --check
           cargo clippy -- -D warnings
 
