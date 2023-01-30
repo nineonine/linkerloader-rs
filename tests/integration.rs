@@ -392,3 +392,14 @@ fn multiple_symbol_defns() {
         _ => panic!("{}", dirname),
     }
 }
+
+#[test]
+fn undefined_symbol() {
+    let dirname = "undefined_symbol";
+    let objects = read_objects_from_dir(&tests_base_loc(dirname));
+    let mut editor = LinkerEditor::new(0x10, 0x10, 0x4, false);
+    match editor.link(objects) {
+        Err(e) => assert_eq!(LinkError::UndefinedSymbolError, e),
+        _ => panic!("{}", dirname),
+    }
+}

@@ -43,4 +43,5 @@ pub enum LinkError {
     UnexpectedLinkError,
     DuplicateObjectError,
     MultipleSymbolDefinitions,
+    UndefinedSymbolError,
 }

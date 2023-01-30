@@ -205,6 +205,12 @@ impl LinkerEditor {
                     }
                 });
         }
+        // Check for undefined symbols
+        if info.global_symtable
+               .values()
+               .any(|(defn,_)| defn.is_none()) {
+            return Some(LinkError::UndefinedSymbolError)
+        }
         None
     }
 
