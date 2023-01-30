@@ -10,7 +10,7 @@ use crate::utils::find_seg_start;
 
 type Defn = (ObjectID, usize);
 type Refs = HashMap<ObjectID, usize>;
-
+#[derive(Debug)]
 pub struct LinkerInfo {
     pub segment_mapping: BTreeMap<ObjectID, BTreeMap<SegmentName, i32>>,
     pub common_block_mapping: HashMap<SymbolName, i32>,
@@ -181,7 +181,8 @@ impl LinkerEditor {
             if symbol.is_common_block() {continue};
             // if symbol already defined in global table - error out
             if symbol.is_defined()
-                && info.global_symtable.contains_key(&symbol.st_name) {
+                && info.global_symtable.get(&symbol.st_name)
+                       .map_or(false, |x| x.0.is_some()) {
                     return Some(LinkError::MultipleSymbolDefinitions)
             }
             info.global_symtable

@@ -36,7 +36,11 @@ impl ObjectIn {
         for seg in self.segments.iter() {
             segs.push(format!("{} {:X} {:X}", seg.segment_name, seg.segment_start, seg.segment_len))
         }
-        s.push_str(segs.join("\n").as_str());
+        let mut stes = vec![];
+        for ste in self.symbol_table.iter() {
+            stes.push(format!("{} {:X} {:X} {}", ste.st_name, ste.st_value, ste.st_seg, ste.st_type))
+        }
+        s.push_str(stes.join("\n").as_str());
         s
     }
 }

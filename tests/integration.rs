@@ -351,6 +351,33 @@ fn common_block_bigger_size() {
             assert_eq!(bss_seg.segment_len as usize, 0xA);
             assert_eq!(common_block, 0xA);
         },
-        Err(_e) => panic!("{}", dirname),
+        Err(e) => panic!("{}: {:?}", dirname, e),
+    }
+}
+
+#[test]
+fn symbol_name_resolution_1() {
+    let dirname = "symbol_name_resolution_1";
+    let objects = read_objects_from_dir(&tests_base_loc(dirname));
+    let mut editor = LinkerEditor::new(0x10, 0x10, 0x4, false);
+    match editor.link(objects) {
+        Ok((_out, info)) => {
+            assert_eq!(2, info.global_symtable.len());
+            assert!(info.global_symtable.contains_key("foo"));
+            assert!(info.global_symtable.contains_key("bar"));
+            let foo_ste1 = info.global_symtable.get("foo").unwrap().clone();
+            assert_eq!("mod_2", foo_ste1.0.as_ref().unwrap().0);
+            assert_eq!(0, foo_ste1.0.as_ref().unwrap().1);
+            assert!(foo_ste1.1.contains_key("mod_1"));
+            assert_eq!(0, *foo_ste1.1.get("mod_1").unwrap());
+            println!("{:?}", info);
+            let foo_ste2 = info.global_symtable.get("bar").unwrap().clone();
+            assert_eq!("mod_1", foo_ste2.0.as_ref().unwrap().0);
+            assert_eq!(1, foo_ste2.0.as_ref().unwrap().1);
+            assert!(foo_ste2.1.contains_key("mod_2"));
+            assert_eq!(1, *foo_ste2.1.get("mod_2").unwrap());
+            println!("{:?}", info);
+        },
+        Err(e) => panic!("{}: {:?}", dirname, e),
     }
 }

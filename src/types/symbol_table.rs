@@ -1,3 +1,5 @@
+use std::fmt;
+
 use super::errors::ParseError;
 
 pub type SymbolName = String;
@@ -36,6 +38,16 @@ impl SymbolTableEntry {
 pub enum SymbolTableEntryType {
     D, // defined
     U, // undefined
+}
+
+impl fmt::Display for SymbolTableEntryType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let segment_name_str = match self {
+            SymbolTableEntryType::D => "D",
+            SymbolTableEntryType::U => "U",
+        };
+        write!(f, "{}", segment_name_str.to_string())
+    }
 }
 
 pub fn parse_symbol_table_entry(nsegs: i32, s: &str) -> Result<SymbolTableEntry, ParseError> {
