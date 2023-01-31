@@ -44,3 +44,10 @@ pub enum LinkError {
     MultipleSymbolDefinitions,
     UndefinedSymbolError,
 }
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum LibError {
+    UnexpectedLibError,
+    ObjectParseFailure(ParseError),
+    ParseLibError,
+}

@@ -15,3 +15,11 @@ pub fn find_seg_start(i: i32, n: i32) -> i32 {
         i + (n - rem)
     }
 }
+
+pub fn range_pairs(array: &[i32]) -> Vec<(i32, i32)> {
+    let mut result = Vec::new();
+    for window in array.windows(2) {
+        result.push((window[0], window[1] - 1));
+    }
+    result
+}

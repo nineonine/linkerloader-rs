@@ -1,11 +1,10 @@
-use std::collections::BTreeMap;
-use std::fs;
 use std::ops::Deref;
 // use linkerloader::gen::gen_obj_data;
-use linkerloader::lib::parse_object;
+use linkerloader::lib::{parse_object,read_objects_from_dir, read_lib};
 use linkerloader::linker::editor::LinkerEditor;
 use linkerloader::types::errors::{LinkError, ParseError};
-use linkerloader::types::object::{parse_object_file, ObjectIn, MAGIC_NUMBER};
+use linkerloader::types::library::{StaticLib};
+use linkerloader::types::object::{MAGIC_NUMBER};
 use linkerloader::types::relocation::{RelRef, RelType, Relocation};
 use linkerloader::types::segment::{SegmentDescr, SegmentName};
 use linkerloader::types::symbol_table::{SymbolTableEntry, SymbolTableEntryType};
@@ -75,39 +74,6 @@ fn multi_object_test(dirname: &str) {
 
 fn tests_base_loc(filename: &str) -> String {
     format!("{}{}", TESTS_DIR, filename)
-}
-
-fn read_objects_from_dir(dirname: &str) -> BTreeMap<String, ObjectIn> {
-    let mut objects = BTreeMap::new();
-
-    let mut entries = fs::read_dir(dirname)
-        .unwrap()
-        .filter_map(|entry| entry.ok())
-        .collect::<Vec<_>>();
-    entries.sort_by_key(|entry| entry.file_name());
-    for entry in entries {
-        let path = entry.path();
-
-        if path.is_file()
-            && !path
-                .file_name()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .ends_with("_out")
-        {
-            let file_contents = fs::read_to_string(&path).unwrap();
-            let file_name = path.file_name().unwrap().to_str().unwrap().to_string();
-            println!("reading {}", file_name.as_str());
-            match parse_object_file(file_contents) {
-                Ok(object) => {
-                    objects.insert(file_name, object);
-                }
-                Err(err) => panic!("read_objects_from_dir: {:?}", err),
-            }
-        }
-    }
-    objects
 }
 
 #[test]
@@ -573,6 +539,41 @@ fn symbol_value_resolution() {
                 .unwrap();
             assert_eq!(0x78 + 0x2, baz_abs_addr);
         }
+        Err(e) => panic!("{}: {:?}", dirname, e),
+    }
+}
+
+#[test]
+fn static_lib_dir() {
+    let dirname = "static_lib_dir";
+    match read_lib(&tests_base_loc(dirname)) {
+        Ok(StaticLib::DirLib{symbols, ..}) => {
+            assert_eq!(3, symbols.len());
+            assert!(symbols.contains_key("libmod_1"));
+            assert!(symbols.get("libmod_1").unwrap().contains("foo"));
+            assert!(symbols.get("libmod_1").unwrap().contains("another_foo"));
+            assert!(symbols.contains_key("libmod_2"));
+            assert!(symbols.get("libmod_2").unwrap().contains("bar"));
+            assert!(symbols.contains_key("libmod_3"));
+            assert!(symbols.get("libmod_3").unwrap().contains("baz"));
+        },
+        Ok(StaticLib::FileLib{..}) => panic!("unexpected StaticLib::FileLib"),
+        Err(e) => panic!("{}: {:?}", dirname, e),
+    }
+}
+
+#[test]
+fn static_lib_file() {
+    let dirname = "static_lib_file";
+    match read_lib(&tests_base_loc(dirname)) {
+        Ok(StaticLib::FileLib{symbols, ..}) => {
+            assert_eq!(4, symbols.len());
+            assert_eq!(0, *symbols.get("foo").unwrap());
+            assert_eq!(0, *symbols.get("another_foo").unwrap());
+            assert_eq!(1, *symbols.get("bar").unwrap());
+            assert_eq!(2, *symbols.get("baz").unwrap());
+        },
+        Ok(StaticLib::DirLib{..}) => panic!("unexpected StaticLib::DirLib"),
         Err(e) => panic!("{}: {:?}", dirname, e),
     }
 }
