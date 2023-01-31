@@ -1,10 +1,10 @@
 use std::ops::Deref;
 // use linkerloader::gen::gen_obj_data;
-use linkerloader::lib::{parse_object,read_objects_from_dir, read_lib};
+use linkerloader::lib::{parse_object, read_lib, read_objects_from_dir};
 use linkerloader::linker::editor::LinkerEditor;
 use linkerloader::types::errors::{LinkError, ParseError};
-use linkerloader::types::library::{StaticLib};
-use linkerloader::types::object::{MAGIC_NUMBER};
+use linkerloader::types::library::StaticLib;
+use linkerloader::types::object::MAGIC_NUMBER;
 use linkerloader::types::relocation::{RelRef, RelType, Relocation};
 use linkerloader::types::segment::{SegmentDescr, SegmentName};
 use linkerloader::types::symbol_table::{SymbolTableEntry, SymbolTableEntryType};
@@ -547,7 +547,7 @@ fn symbol_value_resolution() {
 fn static_lib_dir() {
     let dirname = "static_lib_dir";
     match read_lib(&tests_base_loc(dirname)) {
-        Ok(StaticLib::DirLib{symbols, ..}) => {
+        Ok(StaticLib::DirLib { symbols, .. }) => {
             assert_eq!(3, symbols.len());
             assert!(symbols.contains_key("libmod_1"));
             assert!(symbols.get("libmod_1").unwrap().contains("foo"));
@@ -556,8 +556,8 @@ fn static_lib_dir() {
             assert!(symbols.get("libmod_2").unwrap().contains("bar"));
             assert!(symbols.contains_key("libmod_3"));
             assert!(symbols.get("libmod_3").unwrap().contains("baz"));
-        },
-        Ok(StaticLib::FileLib{..}) => panic!("unexpected StaticLib::FileLib"),
+        }
+        Ok(StaticLib::FileLib { .. }) => panic!("unexpected StaticLib::FileLib"),
         Err(e) => panic!("{}: {:?}", dirname, e),
     }
 }
@@ -566,14 +566,14 @@ fn static_lib_dir() {
 fn static_lib_file() {
     let dirname = "static_lib_file";
     match read_lib(&tests_base_loc(dirname)) {
-        Ok(StaticLib::FileLib{symbols, ..}) => {
+        Ok(StaticLib::FileLib { symbols, .. }) => {
             assert_eq!(4, symbols.len());
             assert_eq!(0, *symbols.get("foo").unwrap());
             assert_eq!(0, *symbols.get("another_foo").unwrap());
             assert_eq!(1, *symbols.get("bar").unwrap());
             assert_eq!(2, *symbols.get("baz").unwrap());
-        },
-        Ok(StaticLib::DirLib{..}) => panic!("unexpected StaticLib::DirLib"),
+        }
+        Ok(StaticLib::DirLib { .. }) => panic!("unexpected StaticLib::DirLib"),
         Err(e) => panic!("{}: {:?}", dirname, e),
     }
 }

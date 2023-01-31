@@ -8,7 +8,7 @@ pub mod lib {
     use std::collections::BTreeMap;
     use std::fs;
 
-    use crate::types::errors::{ParseError, LibError};
+    use crate::types::errors::{LibError, ParseError};
     use crate::types::library::StaticLib;
     use crate::types::object::{parse_object_file, ObjectIn};
     use crate::utils::read_object_file;
