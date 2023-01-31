@@ -118,6 +118,7 @@ impl StaticLib {
                     let mut obj_in = vec![MAGIC_NUMBER];
                     let offset = usize::from_str_radix(offs, 16).unwrap() - 1;
                     let len = usize::from_str_radix(mod_len, 16).unwrap();
+                    #[allow(clippy::needless_range_loop)]
                     for j in offset..offset + len {
                         obj_in.push(file_lines[j]);
                     }

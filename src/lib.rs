@@ -44,7 +44,7 @@ pub mod lib {
                     Ok(object) => {
                         objects.insert(file_name, object);
                     }
-                    Err(err) => panic!("read_objects_from_dir: {:?}", err),
+                    Err(err) => panic!("read_objects_from_dir: {err:?}"),
                 }
             }
         }
