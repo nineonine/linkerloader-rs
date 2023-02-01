@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
-use std::fs;
-use std::path::Path;
+use std::fs::File;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::{env, fs};
 
 use crate::types::errors::LibError;
 use crate::types::object::{parse_object_file, ObjectIn, MAGIC_NUMBER};
@@ -138,5 +140,67 @@ impl StaticLib {
         }
 
         Ok(StaticLib::FileLib { symbols, objects })
+    }
+
+    fn make_map_file(objects: HashMap<&str, ObjectIn>) -> String {
+        let mut map_file = vec![];
+        for (name, o) in objects.iter() {
+            let mut entry = vec![*name];
+            for sym in o.symbol_table.iter() {
+                if sym.is_defined() {
+                    entry.push(&sym.st_name);
+                }
+            }
+            map_file.push(entry.join(" "));
+        }
+        map_file.join("\n")
+    }
+
+    pub fn build_static_dirlib(
+        object_files: Vec<&str>,
+        basepath: Option<&str>,
+        libname: Option<&str>,
+    ) -> Result<String, LibError> {
+        let path = match basepath {
+            Some(p) => PathBuf::from(p),
+            None => env::current_dir().unwrap(),
+        };
+        let name = match libname {
+            Some(n) => PathBuf::from(n),
+            None => PathBuf::from("staticlib"),
+        };
+        let lib_path = path.join(&name);
+        match std::fs::create_dir(&lib_path) {
+            Ok(_) => (),
+            Err(e) => {
+                if e.kind() != std::io::ErrorKind::AlreadyExists {
+                    panic!("Error creating static lib dir: {}", e);
+                } else {
+                    panic!(
+                        "static lib at {:?} already exists, deal with it first!",
+                        basepath
+                    );
+                }
+            }
+        }
+
+        let mut objects = HashMap::new();
+        for object_file in object_files.into_iter() {
+            let obj_path = path.clone().join(object_file);
+            let contents = fs::read_to_string(obj_path)?;
+            match parse_object_file(contents) {
+                Err(e) => {
+                    return Err(LibError::ObjectParseFailure(e));
+                }
+                Ok(o) => {
+                    objects.insert(object_file, o);
+                    std::fs::copy(path.join(object_file), lib_path.join(object_file))?;
+                }
+            }
+        }
+
+        let mut map_file = File::create(lib_path.join(MAP_FILE_NAME))?;
+        map_file.write_all(StaticLib::make_map_file(objects).as_bytes())?;
+        Ok(name.to_str().unwrap().to_owned())
     }
 }

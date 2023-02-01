@@ -1,4 +1,5 @@
 pub mod gen;
+pub mod librarian;
 pub mod linker;
 pub mod logger;
 pub mod types;

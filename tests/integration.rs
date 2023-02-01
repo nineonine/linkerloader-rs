@@ -1,6 +1,9 @@
+use std::fs;
 use std::ops::Deref;
+use std::path::PathBuf;
 // use linkerloader::gen::gen_obj_data;
 use linkerloader::lib::{parse_object, read_lib, read_objects_from_dir};
+use linkerloader::librarian::Librarian;
 use linkerloader::linker::editor::LinkerEditor;
 use linkerloader::types::errors::{LinkError, ParseError};
 use linkerloader::types::library::StaticLib;
@@ -11,6 +14,19 @@ use linkerloader::types::symbol_table::{SymbolTableEntry, SymbolTableEntryType};
 use linkerloader::utils::read_object_file;
 
 const TESTS_DIR: &'static str = "tests/input/";
+
+fn ensure_clean_state(path: &str) {
+    println!("test cleanup");
+    let p = PathBuf::from(path);
+    if p.exists() {
+        // delete static lib if exists
+        let static_lib = p.join(PathBuf::from("staticlib"));
+        if static_lib.exists() {
+            println!("removing static lib");
+            fs::remove_dir_all(static_lib).unwrap();
+        }
+    }
+}
 
 #[test]
 fn test_magic_number_simple() {
@@ -576,4 +592,34 @@ fn static_lib_file() {
         Ok(StaticLib::DirLib { .. }) => panic!("unexpected StaticLib::DirLib"),
         Err(e) => panic!("{}: {:?}", dirname, e),
     }
+}
+
+#[test]
+fn build_static_lib() {
+    let base_loc = tests_base_loc("build_static_lib_dir");
+    ensure_clean_state(&base_loc);
+    let objs = vec!["libmod_1", "libmod_2", "libmod_3"];
+    let mut librarian = Librarian::new(false);
+    match librarian.build_dir(Some(&base_loc), None, objs) {
+        Err(_) => panic!("build_static_lib"),
+        Ok(_) => {
+            let lib_loc = PathBuf::from(&base_loc).join(PathBuf::from("staticlib"));
+            assert!(lib_loc.exists());
+            match read_lib(lib_loc.to_str().unwrap()) {
+                Ok(StaticLib::DirLib { symbols, .. }) => {
+                    assert_eq!(3, symbols.len());
+                    assert!(symbols.contains_key("libmod_1"));
+                    assert!(symbols.get("libmod_1").unwrap().contains("foo"));
+                    assert!(symbols.get("libmod_1").unwrap().contains("another_foo"));
+                    assert!(symbols.contains_key("libmod_2"));
+                    assert!(symbols.get("libmod_2").unwrap().contains("bar"));
+                    assert!(symbols.contains_key("libmod_3"));
+                    assert!(symbols.get("libmod_3").unwrap().contains("baz"));
+                }
+                Ok(StaticLib::FileLib { .. }) => panic!("unexpected StaticLib::FileLib"),
+                Err(_) => panic!("build_static_lib"),
+            }
+        }
+    }
+    ensure_clean_state(&base_loc);
 }

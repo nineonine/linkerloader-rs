@@ -50,4 +50,11 @@ pub enum LibError {
     UnexpectedLibError,
     ObjectParseFailure(ParseError),
     ParseLibError,
+    IOError,
+}
+
+impl From<std::io::Error> for LibError {
+    fn from(_: std::io::Error) -> Self {
+        LibError::IOError
+    }
 }

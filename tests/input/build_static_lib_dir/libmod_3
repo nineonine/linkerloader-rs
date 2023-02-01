@@ -1,0 +1,9 @@
+LINK
+3 1 0
+.text 0 A RP
+.data B 5 PWR
+.bss 10 4 RW
+baz 2 3 D
+04 1A FE AF C0 65 A8 5A D7 27
+F8 97 92 8E FF
+53 EF B8 89
