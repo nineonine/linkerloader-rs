@@ -174,12 +174,9 @@ impl StaticLib {
             Ok(_) => (),
             Err(e) => {
                 if e.kind() != std::io::ErrorKind::AlreadyExists {
-                    panic!("Error creating static lib dir: {}", e);
+                    panic!("Error creating static lib dir: {e}");
                 } else {
-                    panic!(
-                        "static lib at {:?} already exists, deal with it first!",
-                        basepath
-                    );
+                    panic!("static lib at {basepath:?} already exists, deal with it first!");
                 }
             }
         }
