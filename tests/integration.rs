@@ -19,11 +19,17 @@ fn ensure_clean_state(path: &str) {
     println!("test cleanup");
     let p = PathBuf::from(path);
     if p.exists() {
-        // delete static lib if exists
+        // delete static libdir  if exists
         let static_lib = p.join(PathBuf::from("staticlib"));
         if static_lib.exists() {
-            println!("removing static lib");
+            println!("removing static lib dir");
             fs::remove_dir_all(static_lib).unwrap();
+        }
+        // delete static lib file if exists
+        let static_lib = p.join(PathBuf::from("staticlibfile"));
+        if static_lib.exists() {
+            println!("removing static lib file");
+            fs::remove_file(static_lib).unwrap();
         }
     }
 }
@@ -595,13 +601,13 @@ fn static_lib_file() {
 }
 
 #[test]
-fn build_static_lib() {
+fn build_static_lib_dir() {
     let base_loc = tests_base_loc("build_static_lib_dir");
     ensure_clean_state(&base_loc);
     let objs = vec!["libmod_1", "libmod_2", "libmod_3"];
     let mut librarian = Librarian::new(false);
-    match librarian.build_dir(Some(&base_loc), None, objs) {
-        Err(_) => panic!("build_static_lib"),
+    match librarian.build_libdir(Some(&base_loc), None, objs) {
+        Err(_) => panic!("build_static_lib_dir"),
         Ok(_) => {
             let lib_loc = PathBuf::from(&base_loc).join(PathBuf::from("staticlib"));
             assert!(lib_loc.exists());
@@ -617,7 +623,40 @@ fn build_static_lib() {
                     assert!(symbols.get("libmod_3").unwrap().contains("baz"));
                 }
                 Ok(StaticLib::FileLib { .. }) => panic!("unexpected StaticLib::FileLib"),
-                Err(_) => panic!("build_static_lib"),
+                Err(e) => panic!("build_static_lib_dir: {e:?}"),
+            }
+        }
+    }
+    ensure_clean_state(&base_loc);
+}
+
+#[test]
+fn build_static_lib_file() {
+    let base_loc = tests_base_loc("build_static_lib_file");
+    ensure_clean_state(&base_loc);
+    let objs = vec!["libmod_1", "libmod_2", "libmod_3"];
+    let mut librarian = Librarian::new(false);
+    match librarian.build_libfile(Some(&base_loc), None, objs) {
+        Err(_) => panic!("build_static_lib_file"),
+        Ok(_) => {
+            let lib_loc = PathBuf::from(&base_loc).join(PathBuf::from("staticlibfile"));
+            assert!(lib_loc.exists());
+            match read_lib(lib_loc.to_str().unwrap()) {
+                Ok(StaticLib::FileLib { symbols, .. }) => {
+                    assert_eq!(4, symbols.len());
+                    assert!(symbols.contains_key("foo"));
+                    assert!(symbols.contains_key("another_foo"));
+                    assert!(symbols.contains_key("bar"));
+                    assert!(symbols.contains_key("baz"));
+                    assert!(!symbols.contains_key("random"));
+                    assert_eq!(4, symbols.len());
+                    assert_eq!(0, *symbols.get("foo").unwrap());
+                    assert_eq!(0, *symbols.get("another_foo").unwrap());
+                    assert_eq!(1, *symbols.get("bar").unwrap());
+                    assert_eq!(2, *symbols.get("baz").unwrap());
+                }
+                Ok(StaticLib::DirLib { .. }) => panic!("unexpected StaticLib::DirLib"),
+                Err(e) => panic!("build_static_lib_file: {e:?}"),
             }
         }
     }

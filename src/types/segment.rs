@@ -30,6 +30,18 @@ impl Segment {
             segment_descr: vec![],
         }
     }
+
+    pub fn ppr_seg_descr(&self) -> String {
+        self.segment_descr
+            .iter()
+            .map(|sd| match sd {
+                SegmentDescr::R => "R",
+                SegmentDescr::W => "W",
+                SegmentDescr::P => "P",
+            })
+            .collect::<Vec<&str>>()
+            .join("")
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Ord, PartialOrd)]
@@ -42,9 +54,9 @@ pub enum SegmentName {
 impl fmt::Display for SegmentName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let segment_name_str = match self {
-            SegmentName::TEXT => "TEXT",
-            SegmentName::DATA => "DATA",
-            SegmentName::BSS => "BSS",
+            SegmentName::TEXT => ".text",
+            SegmentName::DATA => ".data",
+            SegmentName::BSS => ".bss",
         };
         write!(f, "{segment_name_str}")
     }

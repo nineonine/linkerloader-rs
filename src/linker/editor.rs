@@ -152,7 +152,7 @@ impl LinkerEditor {
     ) -> Result<(), LinkError> {
         for (obj_id, obj) in objects.iter() {
             self.logger
-                .debug(&format!("==> {}\n{}", obj_id, obj.ppr().as_str()));
+                .debug(&format!("==> {}\n{}", obj_id, obj.ppr(true).as_str()));
             let mut seg_offsets = BTreeMap::new();
             for (i, segment) in obj.segments.iter().enumerate() {
                 // allocate storage

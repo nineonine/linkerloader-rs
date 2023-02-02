@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::types::errors::ParseError;
 use crate::types::segment::{Segment, SegmentName};
 use crate::types::symbol_table::SymbolTableEntry;
@@ -23,10 +25,30 @@ pub enum RelRef {
     SymbolRef(usize),
 }
 
+impl fmt::Display for RelRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let rel_ref_str = match self {
+            RelRef::SegmentRef(s) => format!("{s:X}"),
+            RelRef::SymbolRef(s) => format!("{s:X}"),
+        };
+        write!(f, "{rel_ref_str}")
+    }
+}
+
 #[derive(Debug, Eq, PartialEq)]
 pub enum RelType {
     A(i32),
     R(i32),
+}
+
+impl fmt::Display for RelType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let rel_type_str = match self {
+            RelType::A(i) => format!("A{i:X}"),
+            RelType::R(i) => format!("R{i:X}"),
+        };
+        write!(f, "{rel_type_str}")
+    }
 }
 
 pub fn parse_relocation(

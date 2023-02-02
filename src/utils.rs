@@ -23,3 +23,7 @@ pub fn range_pairs(array: &[i32]) -> Vec<(i32, i32)> {
     }
     result
 }
+
+pub fn count_new_lines(s: &str) -> usize {
+    s.chars().filter(|&c| c == '\n').count()
+}

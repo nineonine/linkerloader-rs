@@ -1,5 +1,6 @@
 use std::iter::Peekable;
 use std::num::ParseIntError;
+use std::ops::Deref;
 use std::str::Lines;
 
 use crate::types::errors::ParseError;
@@ -27,18 +28,23 @@ pub struct ObjectIn {
 pub const MAGIC_NUMBER: &str = "LINK";
 
 impl ObjectIn {
-    pub fn ppr(&self) -> String {
+    pub fn ppr(&self, include_hdr: bool) -> String {
         let mut s = String::new();
-        s.push_str(MAGIC_NUMBER);
-        s.push('\n');
+        if include_hdr {
+            s.push_str(MAGIC_NUMBER);
+        }
         s.push_str(format!("{:X} {:X} {:X}\n", self.nsegs, self.nsyms, self.nrels).as_str());
         let mut segs = vec![];
         for seg in self.segments.iter() {
+            let descrs = seg.ppr_seg_descr();
             segs.push(format!(
-                "{} {:X} {:X}",
+                "{} {:X} {:X} {descrs}",
                 seg.segment_name, seg.segment_start, seg.segment_len
             ))
         }
+        s.push_str(segs.join("\n").as_str());
+        s.push('\n');
+
         let mut stes = vec![];
         for ste in self.symbol_table.iter() {
             stes.push(format!(
@@ -47,6 +53,32 @@ impl ObjectIn {
             ))
         }
         s.push_str(stes.join("\n").as_str());
+        s.push('\n');
+
+        let mut rels = vec![];
+        for rel in self.relocations.iter() {
+            let seg = self
+                .segments
+                .iter()
+                .position(|s| s.segment_name == rel.rel_seg)
+                .unwrap()
+                + 1;
+            rels.push(format!(
+                "{:X} {:X} {} {}",
+                rel.rel_loc, seg, rel.rel_ref, rel.rel_type
+            ));
+        }
+        s.push_str(rels.join("\n").as_str());
+
+        let mut code_data = vec![];
+        for data in self.object_data.iter() {
+            let mut ppr_data = vec![];
+            for d in data.deref().iter() {
+                ppr_data.push(format!("{d:02X}"));
+            }
+            code_data.push(ppr_data.join(" "));
+        }
+        s.push_str(code_data.join("\n").as_str());
         s
     }
 }

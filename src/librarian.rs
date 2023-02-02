@@ -14,7 +14,7 @@ impl Librarian {
         }
     }
 
-    pub fn build_dir(
+    pub fn build_libdir(
         &mut self,
         basepath: Option<&str>,
         libname: Option<&str>,
@@ -22,14 +22,36 @@ impl Librarian {
     ) -> Result<(), LibError> {
         self.logger.do_log(
             LogLevel::Info,
-            &format!("Building static library at {basepath:?}"),
+            &format!("Building static libdir at {basepath:?}"),
         );
         match StaticLib::build_static_dirlib(object_files, basepath, libname) {
             Err(e) => panic!("{e:?}"),
             Ok(libname) => {
                 self.logger.do_log(
                     LogLevel::Info,
-                    &format!("Successfully built static library '{libname}'"),
+                    &format!("Successfully built static libdir '{libname}'"),
+                );
+            }
+        }
+        Ok(())
+    }
+
+    pub fn build_libfile(
+        &mut self,
+        basepath: Option<&str>,
+        libname: Option<&str>,
+        object_files: Vec<&str>,
+    ) -> Result<(), LibError> {
+        self.logger.do_log(
+            LogLevel::Info,
+            &format!("Building static libfile at {basepath:?}"),
+        );
+        match StaticLib::build_static_filelib(object_files, basepath, libname) {
+            Err(e) => panic!("{e:?}"),
+            Ok(libname) => {
+                self.logger.do_log(
+                    LogLevel::Info,
+                    &format!("Successfully built static libfile '{libname}'"),
                 );
             }
         }

@@ -7,7 +7,7 @@ use std::{env, fs};
 use crate::types::errors::LibError;
 use crate::types::object::{parse_object_file, ObjectIn, MAGIC_NUMBER};
 use crate::types::symbol_table::SymbolName;
-use crate::utils::read_object_file;
+use crate::utils::{count_new_lines, read_object_file};
 
 type LibObjName = String;
 type ModOffset = usize;
@@ -30,7 +30,7 @@ enum LibFormat {
 }
 
 const MAP_FILE_NAME: &str = "MAP";
-// const MAGIC_NUMBER_LIB: &str = "LIBRARY";
+const MAGIC_NUMBER_LIB: &str = "LIBRARY";
 
 impl StaticLib {
     pub fn parse(path: &str) -> Result<StaticLib, LibError> {
@@ -156,6 +156,38 @@ impl StaticLib {
         map_file.join("\n")
     }
 
+    fn make_staticlib_file(objects: HashMap<&str, ObjectIn>) -> String {
+        // add dummy first row for header which will be updated at the end
+        let mut res = vec![String::new()];
+        let mut modules = vec![];
+        let mut mod_details = vec![];
+        let mut offset: usize = 2; // account for header line
+
+        let mut entries: Vec<_> = objects.iter().collect();
+        entries.sort_by(|a, b| a.0.partial_cmp(b.0).unwrap());
+        for (_, obj) in entries {
+            let printed_obj = obj.ppr(false);
+            let mod_len = count_new_lines(&printed_obj) + 1;
+            // find all the defined symbols
+            let mut defined_syms = vec![];
+            for s in obj.symbol_table.iter() {
+                if s.is_defined() {
+                    defined_syms.push(s.st_name.as_str());
+                }
+            }
+            let syms = defined_syms.join(" ");
+            modules.push(printed_obj);
+            mod_details.push(format!("{offset:X} {mod_len:X} {syms}"));
+            offset += mod_len;
+        }
+        res.append(&mut modules);
+        res.append(&mut mod_details);
+
+        let hdr = format!("{MAGIC_NUMBER_LIB} {:X} {offset:X}", objects.len());
+        res[0] = hdr;
+        res.join("\n")
+    }
+
     pub fn build_static_dirlib(
         object_files: Vec<&str>,
         basepath: Option<&str>,
@@ -174,9 +206,9 @@ impl StaticLib {
             Ok(_) => (),
             Err(e) => {
                 if e.kind() != std::io::ErrorKind::AlreadyExists {
-                    panic!("Error creating static lib dir: {e}");
+                    panic!("Error creating static lib file: {e}");
                 } else {
-                    panic!("static lib at {basepath:?} already exists, deal with it first!");
+                    panic!("static lib file at {basepath:?} already exists, deal with it first!");
                 }
             }
         }
@@ -198,6 +230,40 @@ impl StaticLib {
 
         let mut map_file = File::create(lib_path.join(MAP_FILE_NAME))?;
         map_file.write_all(StaticLib::make_map_file(objects).as_bytes())?;
+        Ok(name.to_str().unwrap().to_owned())
+    }
+
+    pub fn build_static_filelib(
+        object_files: Vec<&str>,
+        basepath: Option<&str>,
+        libname: Option<&str>,
+    ) -> Result<String, LibError> {
+        let path = match basepath {
+            Some(p) => PathBuf::from(p),
+            None => env::current_dir().unwrap(),
+        };
+        let name = match libname {
+            Some(n) => PathBuf::from(n),
+            None => PathBuf::from("staticlibfile"),
+        };
+        let lib_path = path.join(&name);
+
+        let mut objects = HashMap::new();
+        for object_file in object_files.into_iter() {
+            let obj_path = path.clone().join(object_file);
+            let contents = fs::read_to_string(obj_path)?;
+            match parse_object_file(contents) {
+                Err(e) => {
+                    return Err(LibError::ObjectParseFailure(e));
+                }
+                Ok(o) => {
+                    objects.insert(object_file, o);
+                }
+            }
+        }
+
+        let mut map_file = File::create(lib_path)?;
+        map_file.write_all(StaticLib::make_staticlib_file(objects).as_bytes())?;
         Ok(name.to_str().unwrap().to_owned())
     }
 }
