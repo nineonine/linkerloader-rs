@@ -1,0 +1,11 @@
+LINK
+3 3 0
+.text 0 1E RP
+.data 1F A PWR
+.bss 2A 4 RW
+foo 10 1 D
+another_foo F 1 D
+printf 0 1 U
+C8 49 48 95 D2 EF 19 4E 22 8D 6D DC C6 83 74 10 8F 2C B6 A3 B3 29 41 E5 93 93 F1 FF 6B BB
+8E B4 99 71 30 35 CC A2 EE 2C
+4D F1 0C 1A

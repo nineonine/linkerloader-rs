@@ -721,3 +721,31 @@ fn link_with_static_libs() {
         Err(e) => panic!("build_static_lib_file: {e:?}"),
     }
 }
+
+#[test]
+fn link_with_static_libs_duplicate_symbol() {
+    let base_loc = tests_base_loc("link_with_static_libs_duplicate_symbol");
+    ensure_clean_state(&base_loc);
+
+    // first build static libs
+    let mut librarian = Librarian::new(false);
+    let lib_objs = vec!["libmod_1"];
+    let _ = librarian.build_libdir(Some(&base_loc), None, lib_objs);
+
+    // make sure static libs are built
+    let lib_loc = PathBuf::from(&base_loc).join(PathBuf::from("staticlib"));
+    assert!(lib_loc.exists());
+
+    // now link
+    let text_start = 0x10;
+    let staticlib = read_lib(lib_loc.to_str().unwrap()).unwrap();
+    let mut editor = LinkerEditor::new(text_start, 0x10, 0x4, false);
+    let mod_names = vec!["mod_1"];
+    let objects = read_objects(&base_loc, mod_names);
+    match editor.link(objects, vec![staticlib]) {
+        Err(e) => assert_eq!(LinkError::MultipleSymbolDefinitions, e),
+        Ok(_) => {
+            panic!("link_with_static_libs_duplicate_symbol: unexpected Ok")
+        }
+    }
+}
