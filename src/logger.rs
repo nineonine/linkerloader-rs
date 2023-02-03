@@ -59,4 +59,9 @@ impl Logger {
     pub fn debug(&mut self, msg: &str) {
         self.do_log(LogLevel::Debug, msg);
     }
+
+    #[allow(dead_code)]
+    pub fn info(&mut self, msg: &str) {
+        self.do_log(LogLevel::Info, msg);
+    }
 }

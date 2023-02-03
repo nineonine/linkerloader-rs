@@ -8,7 +8,7 @@ use crate::types::relocation::{parse_relocation, Relocation};
 use crate::types::segment::{parse_segment, parse_segment_data, Segment, SegmentData};
 use crate::types::symbol_table::{parse_symbol_table_entry, SymbolTableEntry};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ObjectIn {
     pub nsegs: i32,
     pub nsyms: i32,
@@ -32,6 +32,7 @@ impl ObjectIn {
         let mut s = String::new();
         if include_hdr {
             s.push_str(MAGIC_NUMBER);
+            s.push('\n');
         }
         s.push_str(format!("{:X} {:X} {:X}\n", self.nsegs, self.nsyms, self.nrels).as_str());
         let mut segs = vec![];

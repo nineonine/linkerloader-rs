@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use crate::logger::*;
 use crate::types::errors::LinkError;
+use crate::types::library::StaticLib;
 use crate::types::object::ObjectIn;
 use crate::types::out::ObjectOut;
 use crate::types::segment::{Segment, SegmentName};
@@ -15,7 +16,7 @@ pub struct LinkerInfo {
     pub segment_mapping: BTreeMap<ObjectID, BTreeMap<SegmentName, i32>>,
     pub common_block_mapping: HashMap<SymbolName, i32>,
     pub symbol_tables: HashMap<ObjectID, Vec<SymbolTableEntry>>,
-    pub global_symtable: HashMap<SymbolName, (Option<Defn>, Refs)>,
+    pub global_symtable: BTreeMap<SymbolName, (Option<Defn>, Refs)>,
 }
 
 impl Default for LinkerInfo {
@@ -29,7 +30,7 @@ impl LinkerInfo {
         let segment_mapping = BTreeMap::new();
         let common_block_mapping = HashMap::new();
         let symbol_tables = HashMap::new();
-        let global_symtable = HashMap::new();
+        let global_symtable = BTreeMap::new();
         LinkerInfo {
             segment_mapping,
             common_block_mapping,
@@ -61,6 +62,7 @@ pub struct LinkerEditor {
     text_start: i32,
     data_start_boundary: i32,
     bss_start_boundary: i32,
+    session_objects: BTreeMap<String, ObjectIn>,
     logger: Logger,
 }
 
@@ -92,6 +94,7 @@ impl LinkerEditor {
             data_start_boundary,
             bss_start_boundary,
             logger: Logger::new_stdout_logger(silent),
+            session_objects: BTreeMap::new(),
         };
         r.print_linker_editor_cfg();
         r
@@ -103,118 +106,46 @@ impl LinkerEditor {
     //   * update address mappings in link_info
     pub fn link(
         &mut self,
-        objects: BTreeMap<ObjectID, ObjectIn>,
+        objs_in: BTreeMap<ObjectID, ObjectIn>,
+        static_libs: Vec<StaticLib>,
     ) -> Result<(ObjectOut, LinkerInfo), LinkError> {
         let mut out = ObjectOut::new();
         let mut info = LinkerInfo::new();
 
-        self.alloc_storage_and_symtables(&objects, &mut out, &mut info)?;
+        // initial pass over input objects
+        for (obj_id, obj) in objs_in.into_iter() {
+            self.alloc_storage_and_symtables(&obj_id, &obj, &mut out, &mut info)?;
+            self.session_objects.insert(obj_id, obj);
+        }
 
         self.logger
             .debug(format!("Object out (initial allocation):\n{}", out.ppr()).as_str());
         self.logger
             .debug(format!("Info (initial allocation):\n{}", info.ppr()).as_str());
+        let mut undef_syms: Vec<SymbolName> = vec![];
+        // check if all definitions are in place. if not - check/link libaries
+        for (name, (defn, _)) in info.global_symtable.iter() {
+            if defn.is_none() {
+                undef_syms.push(name.to_string())
+            }
+        }
+        if !undef_syms.is_empty() {
+            self.logger
+                .info(&format!("Undefined symbols:\n  {undef_syms:?}"));
+            self.logger.info("Checking static libs");
+            self.static_libs_symbol_lookup(&mut out, &mut info, &mut undef_syms, &static_libs)?;
+        }
 
-        // update TEXT start and patch segment addrs in link info
-        self.patch_text_seg(&mut out, &mut info);
-
-        // now do the same patching in DATA segment - update start and adjust address in info
-        self.patch_data_seg(&mut out, &mut info);
-
-        // now BSS. We might reuse the returned value in case we need to allocate common block
-        let bss_start = self.patch_bss_seg(&mut out, &mut info);
-
+        // update segment offsets
+        let bss_start = self.patch_segment_offsets(&mut out, &mut info);
         self.logger
             .debug(format!("Object out (segment offset patching):\n{}", out.ppr()).as_str());
         self.logger
             .debug(format!("Info (segment offset patching):\n{}", info.ppr()).as_str());
-
         // Implement Unix-style common blocks. That is, scan the symbol table for undefined symbols
         // with non-zero values, and add space of appropriate size to the .bss segment.
         self.common_block_allocation(&mut out, &mut info, bss_start);
 
-        // resolve global symbols offsets
-        self.resolve_global_sym_offsets(&objects, &mut info);
-
-        /////////////////////////////////////////////
-        self.logger.debug("Linking complete");
-        self.logger
-            .debug(format!("Object out (final):\n{}", out.ppr()).as_str());
-        Ok((out, info))
-    }
-
-    // Allocate storage and build symbol tables
-    fn alloc_storage_and_symtables(
-        &mut self,
-        objects: &BTreeMap<ObjectID, ObjectIn>,
-        out: &mut ObjectOut,
-        info: &mut LinkerInfo,
-    ) -> Result<(), LinkError> {
-        for (obj_id, obj) in objects.iter() {
-            self.logger
-                .debug(&format!("==> {}\n{}", obj_id, obj.ppr(true).as_str()));
-            let mut seg_offsets = BTreeMap::new();
-            for (i, segment) in obj.segments.iter().enumerate() {
-                // allocate storage
-                out.segments
-                    .entry(segment.segment_name.clone())
-                    .and_modify(|out_seg| {
-                        let seg_offset = out_seg.segment_len;
-                        seg_offsets.insert(segment.segment_name.clone(), seg_offset);
-                        out_seg.segment_len = seg_offset + segment.segment_len;
-                        self.logger.debug(&format!(
-                            "new len for {}: 0x{:X} + 0x{:X} = 0x{:X}",
-                            segment.segment_name,
-                            seg_offset,
-                            segment.segment_len,
-                            out_seg.segment_len
-                        ));
-                    })
-                    .or_insert_with(|| {
-                        out.nsegs += 1;
-                        seg_offsets.insert(segment.segment_name.clone(), 0);
-                        let mut s = segment.clone();
-                        s.segment_start = 0;
-                        s
-                    });
-                // object data
-                out.object_data
-                    .entry(segment.segment_name.clone())
-                    .and_modify(|segment_data| {
-                        *segment_data = segment_data.concat(&obj.object_data[i]);
-                    })
-                    .or_insert_with(|| obj.object_data[i].clone());
-            }
-
-            // build symbol tables
-            if let Some(err) = self.build_symbol_tables(info, obj, obj_id) {
-                return Err(err);
-            }
-
-            info.segment_mapping.insert(obj_id.to_string(), seg_offsets);
-            // common blocks
-            for ste in obj.symbol_table.iter() {
-                if ste.is_common_block() {
-                    info.common_block_mapping
-                        .entry(ste.st_name.clone())
-                        .and_modify({
-                            |size| {
-                                if ste.st_value > *size {
-                                    self.logger.debug(
-                                        format!(
-                                            "Adding comon block for symbol {} with size: {}",
-                                            ste.st_name, ste.st_value
-                                        )
-                                        .as_str(),
-                                    );
-                                    *size = ste.st_value;
-                                }
-                            }
-                        })
-                        .or_insert(ste.st_value);
-                }
-            }
-        }
         // Check for undefined symbols
         if info
             .global_symtable
@@ -224,6 +155,87 @@ impl LinkerEditor {
             return Err(LinkError::UndefinedSymbolError);
         }
 
+        // resolve global symbols offsets
+        self.resolve_global_sym_offsets(&mut info);
+
+        /////////////////////////////////////////////
+        self.logger.debug("Linking complete");
+        self.logger
+            .debug(format!("Object out (final):\n{}", out.ppr()).as_str());
+        Ok((out, info))
+    }
+
+    // Allocate storage and build symbol tables for given module object
+    fn alloc_storage_and_symtables(
+        &mut self,
+        obj_id: &ObjectID,
+        obj: &ObjectIn,
+        out: &mut ObjectOut,
+        info: &mut LinkerInfo,
+    ) -> Result<(), LinkError> {
+        self.logger.debug(&format!(
+            " ==> Linking in {}\n{}",
+            obj_id,
+            obj.ppr(true).as_str()
+        ));
+        let mut seg_offsets = BTreeMap::new();
+        for (i, segment) in obj.segments.iter().enumerate() {
+            // allocate storage
+            out.segments
+                .entry(segment.segment_name.clone())
+                .and_modify(|out_seg| {
+                    let seg_offset = out_seg.segment_len;
+                    seg_offsets.insert(segment.segment_name.clone(), seg_offset);
+                    out_seg.segment_len = seg_offset + segment.segment_len;
+                    self.logger.debug(&format!(
+                        "new len for {}: 0x{:X} + 0x{:X} = 0x{:X}",
+                        segment.segment_name, seg_offset, segment.segment_len, out_seg.segment_len
+                    ));
+                })
+                .or_insert_with(|| {
+                    out.nsegs += 1;
+                    seg_offsets.insert(segment.segment_name.clone(), 0);
+                    let mut s = segment.clone();
+                    s.segment_start = 0;
+                    s
+                });
+            // object data
+            out.object_data
+                .entry(segment.segment_name.clone())
+                .and_modify(|segment_data| {
+                    *segment_data = segment_data.concat(&obj.object_data[i]);
+                })
+                .or_insert_with(|| obj.object_data[i].clone());
+        }
+
+        // build symbol tables
+        if let Some(err) = self.build_symbol_tables(info, obj, obj_id) {
+            return Err(err);
+        }
+
+        info.segment_mapping.insert(obj_id.to_string(), seg_offsets);
+        // common blocks
+        for ste in obj.symbol_table.iter() {
+            if ste.is_common_block() {
+                info.common_block_mapping
+                    .entry(ste.st_name.clone())
+                    .and_modify({
+                        |size| {
+                            if ste.st_value > *size {
+                                self.logger.debug(
+                                    format!(
+                                        "Adding comon block for symbol {} with size: {}",
+                                        ste.st_name, ste.st_value
+                                    )
+                                    .as_str(),
+                                );
+                                *size = ste.st_value;
+                            }
+                        }
+                    })
+                    .or_insert(ste.st_value);
+            }
+        }
         Ok(())
     }
 
@@ -271,6 +283,16 @@ impl LinkerEditor {
                 });
         }
         None
+    }
+
+    // update TEXT start and patch segment addrs in link info
+    // then do the same patching in DATA segment - update start and adjust address in info
+    // then BSS. We might reuse the returned value (BSS_START) in case we need to allocate
+    // later common block
+    fn patch_segment_offsets(&mut self, out: &mut ObjectOut, info: &mut LinkerInfo) -> i32 {
+        self.patch_text_seg(out, info);
+        self.patch_data_seg(out, info);
+        self.patch_bss_seg(out, info)
     }
 
     fn patch_text_seg(&mut self, out: &mut ObjectOut, info: &mut LinkerInfo) {
@@ -341,17 +363,14 @@ impl LinkerEditor {
     }
 
     // this assumes all definitions have been spotted and are in place
-    fn resolve_global_sym_offsets(
-        &self,
-        objects: &BTreeMap<ObjectID, ObjectIn>,
-        info: &mut LinkerInfo,
-    ) {
+    fn resolve_global_sym_offsets(&self, info: &mut LinkerInfo) {
         for (defn, _) in info.global_symtable.values_mut() {
             if let Some((mod_name, ste_i, addr)) = defn {
                 let ste: &SymbolTableEntry = &info.symbol_tables.get(mod_name).unwrap()[*ste_i];
                 assert!(ste.st_seg > 0);
                 let seg_i = ste.st_seg as usize - 1;
-                let sym_seg = &objects.get(mod_name).unwrap().segments[seg_i].segment_name;
+                let sym_seg =
+                    &self.session_objects.get(mod_name).unwrap().segments[seg_i].segment_name;
                 let segment_offset = *info
                     .segment_mapping
                     .get(mod_name)
@@ -363,5 +382,46 @@ impl LinkerEditor {
                 panic!("resolve_global_sym_offsets: undefined symbol")
             }
         }
+    }
+
+    fn static_libs_symbol_lookup(
+        &mut self,
+        out: &mut ObjectOut,
+        info: &mut LinkerInfo,
+        undef_syms: &mut Vec<SymbolName>,
+        static_libs: &[StaticLib],
+    ) -> Result<(), LinkError> {
+        while !undef_syms.is_empty() {
+            let undef_sym = undef_syms.pop().unwrap();
+            'outer: for lib in static_libs.iter() {
+                match lib {
+                    StaticLib::DirLib { symbols, objects } => {
+                        for (lib_obj_name, lib_obj_syms) in symbols.iter() {
+                            for lib_obj_sym in lib_obj_syms.iter() {
+                                if lib_obj_sym == &undef_sym {
+                                    // found symbol definition in this lib
+                                    self.logger.debug(&format!(
+                                        "Found symbol '{undef_sym}' in {lib_obj_name}"
+                                    ));
+                                    if let Some(lib_obj) = objects.get(lib_obj_name).cloned() {
+                                        self.alloc_storage_and_symtables(
+                                            lib_obj_name,
+                                            &lib_obj,
+                                            out,
+                                            info,
+                                        )?;
+                                        self.session_objects
+                                            .insert(lib_obj_name.to_string(), lib_obj);
+                                    }
+                                    break 'outer;
+                                }
+                            }
+                        }
+                    }
+                    StaticLib::FileLib { .. } => {} // TODO
+                }
+            }
+        }
+        Ok(())
     }
 }

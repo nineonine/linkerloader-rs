@@ -2,7 +2,7 @@ use std::fs;
 use std::ops::Deref;
 use std::path::PathBuf;
 // use linkerloader::gen::gen_obj_data;
-use linkerloader::lib::{parse_object, read_lib, read_objects_from_dir};
+use linkerloader::lib::{parse_object, read_lib, read_objects, read_objects_from_dir};
 use linkerloader::librarian::Librarian;
 use linkerloader::linker::editor::LinkerEditor;
 use linkerloader::types::errors::{LinkError, ParseError};
@@ -14,6 +14,7 @@ use linkerloader::types::symbol_table::{SymbolTableEntry, SymbolTableEntryType};
 use linkerloader::utils::read_object_file;
 
 const TESTS_DIR: &'static str = "tests/input/";
+const NO_STATIC_LIBS: Vec<StaticLib> = vec![];
 
 fn ensure_clean_state(path: &str) {
     println!("test cleanup");
@@ -58,7 +59,7 @@ fn test_failure(e0: ParseError, fp: &str) {
 fn multi_object_test(dirname: &str) {
     let objects = read_objects_from_dir(&tests_base_loc(dirname));
     let mut editor = LinkerEditor::new(0x100, 0x100, 0x4, false);
-    match editor.link(objects) {
+    match editor.link(objects, NO_STATIC_LIBS) {
         Ok((out, _info)) => {
             assert_eq!(out.nsegs as usize, out.segments.len());
             assert_eq!(out.object_data.len(), out.segments.len());
@@ -430,7 +431,7 @@ fn common_block_1() {
     let dirname = "common_block_1";
     let objects = read_objects_from_dir(&tests_base_loc(dirname));
     let mut editor = LinkerEditor::new(0x10, 0x10, 0x4, false);
-    match editor.link(objects) {
+    match editor.link(objects, NO_STATIC_LIBS) {
         Ok((out, info)) => {
             assert_eq!(3, info.common_block_mapping.len());
             assert_eq!(out.object_data.len(), out.segments.len());
@@ -457,7 +458,7 @@ fn common_block_bigger_size() {
     let dirname = "common_block_bigger_size";
     let objects = read_objects_from_dir(&tests_base_loc(dirname));
     let mut editor = LinkerEditor::new(0x10, 0x10, 0x4, false);
-    match editor.link(objects) {
+    match editor.link(objects, NO_STATIC_LIBS) {
         Ok((out, info)) => {
             assert_eq!(1, info.common_block_mapping.len());
             assert_eq!(out.nsegs as usize, out.segments.len());
@@ -478,7 +479,7 @@ fn symbol_name_resolution_1() {
     let dirname = "symbol_name_resolution_1";
     let objects = read_objects_from_dir(&tests_base_loc(dirname));
     let mut editor = LinkerEditor::new(0x10, 0x10, 0x4, false);
-    match editor.link(objects) {
+    match editor.link(objects, NO_STATIC_LIBS) {
         Ok((_out, info)) => {
             assert_eq!(2, info.global_symtable.len());
             assert!(info.global_symtable.contains_key("foo"));
@@ -503,7 +504,7 @@ fn multiple_symbol_defns() {
     let dirname = "multiple_symbol_defns";
     let objects = read_objects_from_dir(&tests_base_loc(dirname));
     let mut editor = LinkerEditor::new(0x10, 0x10, 0x4, false);
-    match editor.link(objects) {
+    match editor.link(objects, NO_STATIC_LIBS) {
         Err(e) => assert_eq!(LinkError::MultipleSymbolDefinitions, e),
         _ => panic!("{}", dirname),
     }
@@ -514,7 +515,7 @@ fn undefined_symbol() {
     let dirname = "undefined_symbol";
     let objects = read_objects_from_dir(&tests_base_loc(dirname));
     let mut editor = LinkerEditor::new(0x10, 0x10, 0x4, false);
-    match editor.link(objects) {
+    match editor.link(objects, vec![]) {
         Err(e) => assert_eq!(LinkError::UndefinedSymbolError, e),
         _ => panic!("{}", dirname),
     }
@@ -526,7 +527,7 @@ fn symbol_value_resolution() {
     let objects = read_objects_from_dir(&tests_base_loc(dirname));
     let text_start = 0x10;
     let mut editor = LinkerEditor::new(text_start, 0x10, 0x4, false);
-    match editor.link(objects) {
+    match editor.link(objects, NO_STATIC_LIBS) {
         Ok((_out, info)) => {
             println!("{:?}", info);
             assert_eq!(3, info.global_symtable.len());
@@ -661,4 +662,62 @@ fn build_static_lib_file() {
         }
     }
     ensure_clean_state(&base_loc);
+}
+
+#[test]
+fn link_with_static_libs() {
+    let base_loc = tests_base_loc("link_with_static_libs");
+    ensure_clean_state(&base_loc);
+
+    // first build static libs
+    let mut librarian = Librarian::new(false);
+    let lib_objs = vec!["libmod_1", "libmod_2", "libmod_3"];
+    let _ = librarian.build_libdir(Some(&base_loc), None, lib_objs);
+
+    // make sure static libs are built
+    let lib_loc = PathBuf::from(&base_loc).join(PathBuf::from("staticlib"));
+    assert!(lib_loc.exists());
+
+    // now link
+    let text_start = 0x10;
+    let staticlib = read_lib(lib_loc.to_str().unwrap()).unwrap();
+    let mut editor = LinkerEditor::new(text_start, 0x10, 0x4, false);
+    let mod_names = vec!["mod_1", "mod_2", "mod_3"];
+    let objects = read_objects(&base_loc, mod_names);
+    match editor.link(objects, vec![staticlib]) {
+        Ok((out, info)) => {
+            println!("{info:?}");
+            assert_eq!(5, info.symbol_tables.len());
+            assert_eq!(7, info.global_symtable.len());
+            assert!(info.global_symtable.get("malloc").is_some());
+            assert!(info.global_symtable.get("printf").is_some());
+            assert!(info.global_symtable.get("noway").is_none());
+            let text_seg_len = out.segments.get(&SegmentName::TEXT).unwrap().segment_len;
+            let data_seg_len = out.segments.get(&SegmentName::DATA).unwrap().segment_len;
+            let bss_seg_len = out.segments.get(&SegmentName::BSS).unwrap().segment_len;
+            assert_eq!(0x64, text_seg_len);
+            assert_eq!(0x2D, data_seg_len);
+            assert_eq!(0x14, bss_seg_len);
+            assert_eq!(
+                text_start + text_seg_len - 0xA - 0x1E, // minus lib_1 and lib_3 text seg lengths
+                *info
+                    .segment_mapping
+                    .get("libmod_1")
+                    .unwrap()
+                    .get(&SegmentName::TEXT)
+                    .unwrap()
+            );
+            assert_eq!(
+                text_start + text_seg_len - 0xA, // minus lib_3 text seg length
+                *info
+                    .segment_mapping
+                    .get("libmod_3")
+                    .unwrap()
+                    .get(&SegmentName::TEXT)
+                    .unwrap()
+            );
+            ensure_clean_state(&base_loc);
+        }
+        Err(e) => panic!("build_static_lib_file: {e:?}"),
+    }
 }

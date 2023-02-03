@@ -8,6 +8,7 @@ pub mod utils;
 pub mod lib {
     use std::collections::BTreeMap;
     use std::fs;
+    use std::path::PathBuf;
 
     use crate::types::errors::{LibError, ParseError};
     use crate::types::library::StaticLib;
@@ -47,6 +48,23 @@ pub mod lib {
                     }
                     Err(err) => panic!("read_objects_from_dir: {err:?}"),
                 }
+            }
+        }
+        objects
+    }
+
+    pub fn read_objects(dirname: &str, obj_names: Vec<&str>) -> BTreeMap<ObjectName, ObjectIn> {
+        let mut objects = BTreeMap::new();
+        for obj_name in obj_names {
+            let path = PathBuf::from(dirname).join(PathBuf::from(obj_name));
+            let file_contents = fs::read_to_string(&path).unwrap();
+            let file_name = path.file_name().unwrap().to_str().unwrap().to_string();
+            println!("reading {}", file_name.as_str());
+            match parse_object_file(file_contents) {
+                Ok(object) => {
+                    objects.insert(file_name, object);
+                }
+                Err(err) => panic!("read_objects_from_dir: {err:?}"),
             }
         }
         objects

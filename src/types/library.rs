@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -15,7 +15,7 @@ type ModOffset = usize;
 #[derive(Debug)]
 pub enum StaticLib {
     DirLib {
-        symbols: HashMap<LibObjName, HashSet<SymbolName>>,
+        symbols: BTreeMap<LibObjName, BTreeSet<SymbolName>>,
         objects: HashMap<LibObjName, ObjectIn>,
     },
     FileLib {
@@ -50,7 +50,7 @@ impl StaticLib {
     }
 
     fn parse_dir_lib(path: &str) -> Result<Self, LibError> {
-        let mut symbols = HashMap::new();
+        let mut symbols = BTreeMap::new();
         let mut objects = HashMap::new();
 
         let lib_path = Path::new(path);

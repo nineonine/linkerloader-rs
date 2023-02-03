@@ -39,8 +39,9 @@ impl ObjectOut {
         let mut code_and_data = vec![];
         for segment_name in segment_order.iter() {
             if let Some(seg) = self.segments.get(segment_name) {
+                let descrs = seg.ppr_seg_descr();
                 segs.push(format!(
-                    "{} {:X} {:X}",
+                    "{} {:X} {:X} {descrs}",
                     segment_name, seg.segment_start, seg.segment_len
                 ));
                 if let Some(segment_data) = self.object_data.get(segment_name) {
@@ -54,6 +55,7 @@ impl ObjectOut {
         }
         s.push_str(segs.join("\n").as_str());
         s.push('\n');
+
         s.push_str(code_and_data.join("\n").as_str());
         s
     }

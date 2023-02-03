@@ -11,7 +11,7 @@ use crate::types::symbol_table::SymbolTableEntry;
 // and type is an architecture-dependent relocation type. Common types are
 // A4 for a four-byte absolute address, or R4 for a four-byte relative address.
 // Some relocation types may have extra fields after the type.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Relocation {
     pub rel_loc: i32, // relocation address
     pub rel_seg: SegmentName,
@@ -19,7 +19,7 @@ pub struct Relocation {
     pub rel_type: RelType,
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum RelRef {
     SegmentRef(usize),
     SymbolRef(usize),
@@ -35,7 +35,7 @@ impl fmt::Display for RelRef {
     }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum RelType {
     A(i32),
     R(i32),
