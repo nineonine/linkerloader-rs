@@ -17,8 +17,12 @@ const TESTS_DIR: &'static str = "tests/input/";
 const NO_STATIC_LIBS: Vec<StaticLib> = vec![];
 
 fn ensure_clean_state(path: &str) {
+    ensure_clean_state_extra(path, vec![]);
+}
+
+fn ensure_clean_state_extra(path: &str, other_things_to_clean: Vec<&str>) {
     println!("test cleanup");
-    let p = PathBuf::from(path);
+    let p = &PathBuf::from(path);
     if p.exists() {
         // delete static libdir  if exists
         let static_lib = p.join(PathBuf::from("staticlib"));
@@ -31,6 +35,17 @@ fn ensure_clean_state(path: &str) {
         if static_lib.exists() {
             println!("removing static lib file");
             fs::remove_file(static_lib).unwrap();
+        }
+    }
+    for s in other_things_to_clean.into_iter() {
+        let p1 = &p.join(PathBuf::from(s));
+        if p1.exists() {
+            if p1.is_dir() {
+                let _ = fs::remove_dir_all(p1);
+            }
+            if p1.is_file() {
+                let _ = fs::remove_file(p1);
+            }
         }
     }
 }
@@ -748,4 +763,43 @@ fn link_with_static_libs_duplicate_symbol() {
             panic!("link_with_static_libs_duplicate_symbol: unexpected Ok")
         }
     }
+}
+
+#[test]
+fn link_with_static_libs_lib_deps() {
+    let base_loc = tests_base_loc("link_with_static_libs_lib_deps");
+    ensure_clean_state_extra(&base_loc, vec!["staticlib1", "staticlib2"]);
+
+    // first build static libs
+    let mut librarian = Librarian::new(false);
+    let lib1_objs = vec!["libmod_1"];
+    let lib2_objs = vec!["liblibmod_1"];
+    let _ = librarian.build_libdir(Some(&base_loc), Some("staticlib1"), lib1_objs);
+    let _ = librarian.build_libdir(Some(&base_loc), Some("staticlib2"), lib2_objs);
+
+    // make sure static libs are built
+    let lib1_loc = PathBuf::from(&base_loc).join(PathBuf::from("staticlib1"));
+    let lib2_loc = PathBuf::from(&base_loc).join(PathBuf::from("staticlib2"));
+    assert!(lib1_loc.exists());
+    assert!(lib2_loc.exists());
+
+    // now link
+    let text_start = 0x10;
+    let staticlib1_dir = read_lib(lib1_loc.to_str().unwrap()).unwrap();
+    let staticlib2_dir = read_lib(lib2_loc.to_str().unwrap()).unwrap();
+    let mut editor = LinkerEditor::new(text_start, 0x10, 0x4, false);
+    let mod_names = vec!["mod_1"];
+    let objects = read_objects(&base_loc, mod_names);
+    match editor.link(objects, vec![staticlib1_dir, staticlib2_dir]) {
+        Ok((_out, info)) => {
+            println!("{info:?}");
+            assert_eq!(3, info.symbol_tables.len());
+            assert_eq!(3, info.global_symtable.len());
+            assert!(info.global_symtable.get("exec").is_some());
+            assert!(info.global_symtable.get("printf").is_some());
+            assert!(info.global_symtable.get("nope").is_none());
+        }
+        Err(e) => panic!("link_with_static_libs_lib_deps: {e:?}"),
+    }
+    ensure_clean_state_extra(&base_loc, vec!["staticlib1", "staticlib2"]);
 }
