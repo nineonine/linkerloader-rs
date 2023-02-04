@@ -803,3 +803,37 @@ fn link_with_static_libs_lib_deps() {
     }
     ensure_clean_state_extra(&base_loc, vec!["staticlib1", "staticlib2"]);
 }
+
+#[test]
+fn link_with_static_libs_lib_deps_undef() {
+    let base_loc = tests_base_loc("link_with_static_libs_lib_deps_undef");
+    ensure_clean_state_extra(&base_loc, vec!["staticlib1", "staticlib2"]);
+
+    // first build static libs
+    let mut librarian = Librarian::new(false);
+    let lib1_objs = vec!["libmod_1"];
+    let lib2_objs = vec!["liblibmod_1"];
+    let _ = librarian.build_libdir(Some(&base_loc), Some("staticlib1"), lib1_objs);
+    let _ = librarian.build_libdir(Some(&base_loc), Some("staticlib2"), lib2_objs);
+
+    // make sure static libs are built
+    let lib1_loc = PathBuf::from(&base_loc).join(PathBuf::from("staticlib1"));
+    let lib2_loc = PathBuf::from(&base_loc).join(PathBuf::from("staticlib2"));
+    assert!(lib1_loc.exists());
+    assert!(lib2_loc.exists());
+
+    // now link
+    let text_start = 0x10;
+    let staticlib1_dir = read_lib(lib1_loc.to_str().unwrap()).unwrap();
+    let staticlib2_dir = read_lib(lib2_loc.to_str().unwrap()).unwrap();
+    let mut editor = LinkerEditor::new(text_start, 0x10, 0x4, false);
+    let mod_names = vec!["mod_1"];
+    let objects = read_objects(&base_loc, mod_names);
+    match editor.link(objects, vec![staticlib1_dir, staticlib2_dir]) {
+        Err(e) => assert_eq!(LinkError::UndefinedSymbolError, e),
+        Ok(_) => {
+            panic!("link_with_static_libs_lib_deps_undef: unexpected Ok")
+        }
+    }
+    ensure_clean_state_extra(&base_loc, vec!["staticlib1", "staticlib2"]);
+}
