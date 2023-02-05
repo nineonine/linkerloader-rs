@@ -392,12 +392,15 @@ impl LinkerEditor {
         undef_syms: &mut Vec<SymbolName>,
         static_libs: &[StaticLib],
     ) -> Result<(), LinkError> {
-        let mut visited_libs: HashSet<&String> = HashSet::new();
+        let mut visited_libs: HashSet<String> = HashSet::new();
         while !undef_syms.is_empty() {
             let undef_sym = undef_syms.pop().unwrap();
+
             'outer: for lib in static_libs.iter() {
                 match lib {
-                    StaticLib::DirLib { symbols, objects } => {
+                    StaticLib::DirLib {
+                        symbols, objects, ..
+                    } => {
                         for (lib_obj_name, lib_obj_syms) in symbols.iter() {
                             if visited_libs.contains(lib_obj_name) {
                                 continue;
@@ -422,7 +425,7 @@ impl LinkerEditor {
                                                 undef_syms.push(ste.st_name.to_string());
                                             }
                                         }
-                                        visited_libs.insert(lib_obj_name);
+                                        visited_libs.insert(lib_obj_name.to_string());
                                         self.logger.debug(&format!(
                                             "Remaining undefined symbols: {undef_syms:?}"
                                         ));
@@ -432,7 +435,40 @@ impl LinkerEditor {
                             }
                         }
                     }
-                    StaticLib::FileLib { .. } => {} // TODO
+                    StaticLib::FileLib {
+                        symbols,
+                        objects,
+                        libname,
+                    } => {
+                        for (lib_obj_sym, obj_offset) in symbols.iter() {
+                            if lib_obj_sym == &undef_sym {
+                                // found symbol definition in this lib file
+                                if let Some(lib_obj) = objects.get(*obj_offset) {
+                                    let libobj_id = format!("{libname}_mod_{obj_offset}");
+                                    self.logger.debug(&format!(
+                                        "Found symbol '{undef_sym}' at offset {obj_offset}"
+                                    ));
+                                    if visited_libs.contains(&libobj_id) {
+                                        continue;
+                                    }
+                                    self.alloc_storage_and_symtables(
+                                        &libobj_id, lib_obj, out, info,
+                                    )?;
+                                    self.session_objects
+                                        .insert(libobj_id.to_string(), lib_obj.clone());
+                                    for ste in lib_obj.symbol_table.iter() {
+                                        if !ste.is_defined() {
+                                            undef_syms.push(ste.st_name.to_string());
+                                        }
+                                    }
+                                    visited_libs.insert(libobj_id);
+                                    self.logger.debug(&format!(
+                                        "Remaining undefined symbols: {undef_syms:?}"
+                                    ));
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

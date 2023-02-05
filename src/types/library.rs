@@ -15,10 +15,12 @@ type ModOffset = usize;
 #[derive(Debug)]
 pub enum StaticLib {
     DirLib {
+        libname: String,
         symbols: BTreeMap<LibObjName, BTreeSet<SymbolName>>,
         objects: HashMap<LibObjName, ObjectIn>,
     },
     FileLib {
+        libname: String,
         symbols: HashMap<SymbolName, ModOffset>,
         objects: Vec<ObjectIn>,
     },
@@ -94,7 +96,16 @@ impl StaticLib {
                 }
             }
         }
-        Ok(StaticLib::DirLib { symbols, objects })
+        let libname = PathBuf::from(path)
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        Ok(StaticLib::DirLib {
+            symbols,
+            objects,
+            libname,
+        })
     }
 
     fn parse_file_lib(path: &str) -> Result<Self, LibError> {
@@ -138,8 +149,16 @@ impl StaticLib {
                 _ => return Err(LibError::ParseLibError),
             };
         }
-
-        Ok(StaticLib::FileLib { symbols, objects })
+        let libname = PathBuf::from(path)
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        Ok(StaticLib::FileLib {
+            symbols,
+            objects,
+            libname,
+        })
     }
 
     fn make_map_file(objects: HashMap<&str, ObjectIn>) -> String {

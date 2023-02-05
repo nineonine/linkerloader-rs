@@ -733,7 +733,7 @@ fn link_with_static_libs() {
             );
             ensure_clean_state(&base_loc);
         }
-        Err(e) => panic!("build_static_lib_file: {e:?}"),
+        Err(e) => panic!("link_with_static_libs: {e:?}"),
     }
 }
 
@@ -836,4 +836,62 @@ fn link_with_static_libs_lib_deps_undef() {
         }
     }
     ensure_clean_state_extra(&base_loc, vec!["staticlib1", "staticlib2"]);
+}
+
+#[test]
+fn link_with_static_libs_single_file() {
+    let base_loc = tests_base_loc("link_with_static_libs_single_file");
+    ensure_clean_state(&base_loc);
+
+    // first build static libs
+    let mut librarian = Librarian::new(false);
+    let lib_objs = vec!["libmod_1", "libmod_2", "libmod_3"];
+    let _ = librarian.build_libfile(Some(&base_loc), None, lib_objs);
+
+    // make sure static libs are built
+    let lib_loc = PathBuf::from(&base_loc).join(PathBuf::from("staticlibfile"));
+    assert!(lib_loc.exists());
+
+    // now link
+    let text_start = 0x10;
+    let staticlib = read_lib(lib_loc.to_str().unwrap()).unwrap();
+    let mut editor = LinkerEditor::new(text_start, 0x10, 0x4, false);
+    let mod_names = vec!["mod_1", "mod_2", "mod_3"];
+    let objects = read_objects(&base_loc, mod_names);
+    match editor.link(objects, vec![staticlib]) {
+        Ok((out, info)) => {
+            println!("{info:?}");
+            assert_eq!(5, info.symbol_tables.len());
+            assert_eq!(7, info.global_symtable.len());
+            assert!(info.global_symtable.get("malloc").is_some());
+            assert!(info.global_symtable.get("printf").is_some());
+            assert!(info.global_symtable.get("noway").is_none());
+            let text_seg_len = out.segments.get(&SegmentName::TEXT).unwrap().segment_len;
+            let data_seg_len = out.segments.get(&SegmentName::DATA).unwrap().segment_len;
+            let bss_seg_len = out.segments.get(&SegmentName::BSS).unwrap().segment_len;
+            assert_eq!(0x64, text_seg_len);
+            assert_eq!(0x2D, data_seg_len);
+            assert_eq!(0x14, bss_seg_len);
+            assert_eq!(
+                text_start + text_seg_len - 0xA - 0x1E, // minus lib_1 and lib_3 text seg lengths
+                *info
+                    .segment_mapping
+                    .get("staticlibfile_mod_0")
+                    .unwrap()
+                    .get(&SegmentName::TEXT)
+                    .unwrap()
+            );
+            assert_eq!(
+                text_start + text_seg_len - 0xA, // minus lib_3 text seg length
+                *info
+                    .segment_mapping
+                    .get("staticlibfile_mod_2")
+                    .unwrap()
+                    .get(&SegmentName::TEXT)
+                    .unwrap()
+            );
+            ensure_clean_state(&base_loc);
+        }
+        Err(e) => panic!("link_with_static_libs_single_file: {e:?}"),
+    }
 }
