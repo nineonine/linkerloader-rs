@@ -159,6 +159,9 @@ impl LinkerEditor {
         // resolve global symbols offsets
         self.resolve_global_sym_offsets(&mut info);
 
+        // perform relocations
+        self.run_relocations(&info);
+
         /////////////////////////////////////////////
         self.logger.debug("Linking complete");
         self.logger
@@ -474,4 +477,6 @@ impl LinkerEditor {
         }
         Ok(())
     }
+
+    pub fn run_relocations(&self, _info: &LinkerInfo) {}
 }

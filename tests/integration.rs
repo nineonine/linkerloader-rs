@@ -396,12 +396,12 @@ fn relocations() {
             assert_eq!(0x14, rel1.rel_loc);
             assert_eq!(SegmentName::TEXT, rel1.rel_seg);
             assert_eq!(RelRef::SymbolRef(1), rel1.rel_ref);
-            assert_eq!(RelType::R(4), rel1.rel_type);
+            assert_eq!(RelType::R4, rel1.rel_type);
             let rel2: &Relocation = &obj.relocations[1];
             assert_eq!(0x1a, rel2.rel_loc);
             assert_eq!(SegmentName::TEXT, rel2.rel_seg);
             assert_eq!(RelRef::SymbolRef(2), rel2.rel_ref);
-            assert_eq!(RelType::R(4), rel2.rel_type);
+            assert_eq!(RelType::R4, rel2.rel_type);
             assert_eq!(0x33, obj.object_data[0].deref().len());
         }
     }
@@ -895,3 +895,6 @@ fn link_with_static_libs_single_file() {
         Err(e) => panic!("link_with_static_libs_single_file: {e:?}"),
     }
 }
+
+#[test]
+fn run_relocations() {}

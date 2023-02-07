@@ -10,7 +10,7 @@ use crate::types::symbol_table::SymbolTableEntry;
 // location is found, ref is the segment or symbol number to be relocated there,
 // and type is an architecture-dependent relocation type. Common types are
 // A4 for a four-byte absolute address, or R4 for a four-byte relative address.
-// Some relocation types may have extra fields after the type.
+// Some relocation types may have extra fields after the type. (TODO)
 #[derive(Debug, Clone)]
 pub struct Relocation {
     pub rel_loc: i32, // relocation address
@@ -35,17 +35,35 @@ impl fmt::Display for RelRef {
     }
 }
 
+// * A4 Absolute reference. The four bytes at loc are an absolute reference to segment ref.
+// * R4 Relative reference. The four bytes at loc are a relative reference to segment ref. That is, the bytes at loc contain the difference
+//   between the address after loc (loc+4) and the target address. (This
+//   is the x86 relative jump instruction format.)
+// * AS4 Absolute symbol reference. The four bytes at loc are an absolute reference to symbol ref, with the addend being the value already stored at loc. (The addend is usually zero.)
+// * RS4 Relative symbol reference. The four bytes at loc are a relative
+//   reference to symbol ref, with the addend being the value already
+//   stored at loc. (The addend is usually zero.)
+// * U2 Upper half reference. The two bytes at loc are the most significant two bytes of a reference to symbol ref.
+// * L2 Lower half reference. The two bytes at loc are the least significant two bytes of a reference to symbol ref.
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum RelType {
-    A(i32),
-    R(i32),
+    A4,
+    R4,
+    AS4,
+    RS4,
+    U2,
+    L2,
 }
 
 impl fmt::Display for RelType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let rel_type_str = match self {
-            RelType::A(i) => format!("A{i:X}"),
-            RelType::R(i) => format!("R{i:X}"),
+            RelType::A4 => "A4".to_string(),
+            RelType::R4 => "R4".to_string(),
+            RelType::AS4 => "AS4".to_string(),
+            RelType::RS4 => "RS4".to_string(),
+            RelType::U2 => "U2".to_string(),
+            RelType::L2 => "L2".to_string(),
         };
         write!(f, "{rel_type_str}")
     }
@@ -85,21 +103,15 @@ pub fn parse_relocation(
                     }
                 }
             }
-            if let Some(c) = ty.chars().next() {
-                match c {
-                    'R' => match ty[1..].parse() {
-                        Ok(i) => rel_type = RelType::R(i),
-                        Err(_) => return Err(ParseError::InvalidRelType),
-                    },
-                    'A' => match ty[1..].parse() {
-                        Ok(i) => rel_type = RelType::A(i),
-                        Err(_) => return Err(ParseError::InvalidRelType),
-                    },
-                    _ => return Err(ParseError::InvalidRelType),
-                }
-            } else {
-                return Err(ParseError::InvalidRelType);
-            }
+            rel_type = match *ty {
+                "A4" => RelType::A4,
+                "R4" => RelType::R4,
+                "AS4" => RelType::AS4,
+                "RS4" => RelType::RS4,
+                "U2" => RelType::U2,
+                "L2" => RelType::L2,
+                _ => return Err(ParseError::InvalidRelType),
+            };
         }
         _otherwise => return Err(ParseError::InvalidRelocationEntry),
     }
