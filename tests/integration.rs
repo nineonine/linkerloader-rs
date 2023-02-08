@@ -110,8 +110,8 @@ fn multi_object_test(dirname: &str) {
     }
 }
 
-fn tests_base_loc(filename: &str) -> String {
-    format!("{}{}", TESTS_DIR, filename)
+fn tests_base_loc(name: &str) -> String {
+    format!("{}{}", TESTS_DIR, name)
 }
 
 #[test]
@@ -395,13 +395,13 @@ fn relocations() {
             let rel1: &Relocation = &obj.relocations[0];
             assert_eq!(0x14, rel1.rel_loc);
             assert_eq!(SegmentName::TEXT, rel1.rel_seg);
-            assert_eq!(RelRef::SymbolRef(1), rel1.rel_ref);
-            assert_eq!(RelType::R4, rel1.rel_type);
+            assert_eq!(RelRef::SymbolRef(0), rel1.rel_ref);
+            assert_eq!(RelType::RS4, rel1.rel_type);
             let rel2: &Relocation = &obj.relocations[1];
             assert_eq!(0x1a, rel2.rel_loc);
             assert_eq!(SegmentName::TEXT, rel2.rel_seg);
-            assert_eq!(RelRef::SymbolRef(2), rel2.rel_ref);
-            assert_eq!(RelType::R4, rel2.rel_type);
+            assert_eq!(RelRef::SymbolRef(1), rel2.rel_ref);
+            assert_eq!(RelType::RS4, rel2.rel_type);
             assert_eq!(0x33, obj.object_data[0].deref().len());
         }
     }
@@ -897,4 +897,15 @@ fn link_with_static_libs_single_file() {
 }
 
 #[test]
-fn run_relocations() {}
+fn run_relocations() {
+    let testdir = tests_base_loc("run_relocations");
+    let objects = read_objects_from_dir(&testdir);
+    let mut editor = LinkerEditor::new(0x0, 0x0, 0x0, false);
+    match editor.link(objects, NO_STATIC_LIBS) {
+        Ok((out, info)) => {
+            println!("{out:?}");
+            println!("{info:?}");
+        }
+        Err(_e) => panic!("{}", testdir),
+    }
+}

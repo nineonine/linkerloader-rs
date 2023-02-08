@@ -5,6 +5,7 @@ use crate::types::errors::LinkError;
 use crate::types::library::StaticLib;
 use crate::types::object::ObjectIn;
 use crate::types::out::ObjectOut;
+use crate::types::relocation::RelRef;
 use crate::types::segment::{Segment, SegmentName};
 use crate::types::symbol_table::{SymbolName, SymbolTableEntry};
 use crate::utils::find_seg_start;
@@ -62,7 +63,7 @@ pub struct LinkerEditor {
     text_start: i32,
     data_start_boundary: i32,
     bss_start_boundary: i32,
-    session_objects: BTreeMap<String, ObjectIn>,
+    session_objects: BTreeMap<ObjectID, ObjectIn>,
     logger: Logger,
 }
 
@@ -478,5 +479,25 @@ impl LinkerEditor {
         Ok(())
     }
 
-    pub fn run_relocations(&self, _info: &LinkerInfo) {}
+    pub fn run_relocations(&mut self, _info: &LinkerInfo) {
+        for (modname, mod_obj) in self.session_objects.iter() {
+            self.logger
+                .debug(&format!("Running relocations for {modname:}"));
+            // println!("DEBUG: {mod_obj:?}");
+            for r in mod_obj.relocations.iter() {
+                let reloc_entity = match r.rel_ref {
+                    RelRef::SegmentRef(seg_i) => {
+                        format!("segment {}", mod_obj.segments[seg_i].segment_name)
+                    }
+                    RelRef::SymbolRef(sym_i) => {
+                        format!("symbol '{}'", mod_obj.symbol_table[sym_i].st_name)
+                    }
+                };
+                self.logger.debug(&format!(
+                    "Relocation {} of {reloc_entity} reference at offset {:X} (segment {})",
+                    r.rel_type, r.rel_loc, r.rel_seg
+                ));
+            }
+        }
+    }
 }

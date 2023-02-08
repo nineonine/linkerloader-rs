@@ -20,6 +20,7 @@ pub struct Relocation {
 }
 
 #[derive(Debug, Eq, PartialEq, Clone)]
+// Note that we store 0-based indexes !!!
 pub enum RelRef {
     SegmentRef(usize),
     SymbolRef(usize),
@@ -53,6 +54,12 @@ pub enum RelType {
     RS4,
     U2,
     L2,
+}
+
+impl RelType {
+    fn is_segment_rel(&self) -> bool {
+        matches!(self, RelType::A4 | RelType::R4)
+    }
 }
 
 impl fmt::Display for RelType {
@@ -93,16 +100,6 @@ pub fn parse_relocation(
                     Some(s) => rel_seg = s.segment_name.clone(),
                 },
             }
-            match usize::from_str_radix(_ref, 16) {
-                Err(_) => return Err(ParseError::InvalidRelRef),
-                Ok(i) => {
-                    match st.get(i - 1) {
-                        None => return Err(ParseError::RelSymbolOutOfRange),
-                        // for now just always assume relocation refs are symbols
-                        Some(_) => rel_ref = RelRef::SymbolRef(i),
-                    }
-                }
-            }
             rel_type = match *ty {
                 "A4" => RelType::A4,
                 "R4" => RelType::R4,
@@ -112,6 +109,22 @@ pub fn parse_relocation(
                 "L2" => RelType::L2,
                 _ => return Err(ParseError::InvalidRelType),
             };
+            match usize::from_str_radix(_ref, 16) {
+                Err(_) => return Err(ParseError::InvalidRelRef),
+                Ok(i) => {
+                    if rel_type.is_segment_rel() {
+                        match segs.get(i - 1) {
+                            None => return Err(ParseError::RelSegmentOutOfRange),
+                            Some(_) => rel_ref = RelRef::SegmentRef(i - 1),
+                        }
+                    } else {
+                        match st.get(i - 1) {
+                            None => return Err(ParseError::RelSymbolOutOfRange),
+                            Some(_) => rel_ref = RelRef::SymbolRef(i - 1),
+                        }
+                    }
+                }
+            }
         }
         _otherwise => return Err(ParseError::InvalidRelocationEntry),
     }
