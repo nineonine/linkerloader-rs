@@ -92,6 +92,28 @@ impl SegmentData {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+
+    pub fn update(&mut self, start: usize, len: usize, patch: Vec<u8>) {
+        let end = start + len;
+        let data_len = self.len();
+        if end > data_len {
+            panic!("Index out of bounds: end {end} is greater than data length {data_len}");
+        }
+        let mut new_data = Vec::with_capacity(data_len + patch.len());
+        new_data.extend_from_slice(&self.0[0..start]);
+        new_data.extend_from_slice(&patch);
+        new_data.extend_from_slice(&self.0[end..data_len]);
+
+        self.0 = new_data;
+    }
+
+    pub fn get_at(&self, start: usize, len: usize) -> Option<&[u8]> {
+        let end = start + len;
+        if end > self.0.len() {
+            return None;
+        }
+        Some(&self.0[start..end])
+    }
 }
 
 pub fn parse_segment(s: &str) -> Result<Segment, ParseError> {

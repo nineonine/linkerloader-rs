@@ -5,10 +5,10 @@ use crate::types::errors::LinkError;
 use crate::types::library::StaticLib;
 use crate::types::object::ObjectIn;
 use crate::types::out::ObjectOut;
-use crate::types::relocation::RelRef;
+use crate::types::relocation::{RelRef, RelType};
 use crate::types::segment::{Segment, SegmentName};
 use crate::types::symbol_table::{SymbolName, SymbolTableEntry};
-use crate::utils::find_seg_start;
+use crate::utils::{find_seg_start, mk_addr_4};
 
 type Defn = (ObjectID, usize, Option<i32>);
 type Refs = HashMap<ObjectID, usize>;
@@ -59,12 +59,18 @@ impl LinkerInfo {
         s
     }
 }
+
+pub enum Endianness {
+    BigEndian,
+    LittleEndian,
+}
 pub struct LinkerEditor {
     text_start: i32,
     data_start_boundary: i32,
     bss_start_boundary: i32,
     session_objects: BTreeMap<ObjectID, ObjectIn>,
     logger: Logger,
+    _endianness: Endianness,
 }
 
 type ObjectID = String;
@@ -96,6 +102,7 @@ impl LinkerEditor {
             bss_start_boundary,
             logger: Logger::new_stdout_logger(silent),
             session_objects: BTreeMap::new(),
+            _endianness: Endianness::BigEndian,
         };
         r.print_linker_editor_cfg();
         r
@@ -161,12 +168,14 @@ impl LinkerEditor {
         self.resolve_global_sym_offsets(&mut info);
 
         // perform relocations
-        self.run_relocations(&info);
+        self.run_relocations(&mut out, &info)?;
 
         /////////////////////////////////////////////
         self.logger.debug("Linking complete");
         self.logger
             .debug(format!("Object out (final):\n{}", out.ppr()).as_str());
+        self.logger
+            .debug(format!("Info (final):\n{}", info.ppr()).as_str());
         Ok((out, info))
     }
 
@@ -479,7 +488,11 @@ impl LinkerEditor {
         Ok(())
     }
 
-    pub fn run_relocations(&mut self, _info: &LinkerInfo) {
+    pub fn run_relocations(
+        &mut self,
+        out: &mut ObjectOut,
+        info: &LinkerInfo,
+    ) -> Result<(), LinkError> {
         for (modname, mod_obj) in self.session_objects.iter() {
             self.logger
                 .debug(&format!("Running relocations for {modname:}"));
@@ -497,7 +510,46 @@ impl LinkerEditor {
                     "Relocation {} of {reloc_entity} reference at offset {:X} (segment {})",
                     r.rel_type, r.rel_loc, r.rel_seg
                 ));
+                match r.rel_type {
+                    RelType::A4 => {
+                        match r.rel_ref {
+                            RelRef::SymbolRef(_) => panic!("run_relocations: A4 with SymbolRef"),
+                            RelRef::SegmentRef(seg_i) => {
+                                // where does relocation happen?
+                                let seg_name = mod_obj.segments[seg_i].segment_name.clone();
+                                // absolute segment ref / address
+                                let mod_seg_off = *info
+                                    .segment_mapping
+                                    .get(modname)
+                                    .unwrap()
+                                    .get(&seg_name)
+                                    .unwrap();
+                                match mk_addr_4(mod_seg_off) {
+                                    None => return Err(LinkError::AddressOverflowError),
+                                    Some(saa) => {
+                                        out.object_data.entry(r.rel_seg.clone()).and_modify(|sd| {
+                                            let reloc_seg_start =
+                                                out.segments.get(&r.rel_seg).unwrap().segment_start;
+                                            let reloc_seg_off =
+                                                reloc_seg_start + r.rel_loc - self.text_start;
+                                            println!("{r:?} {seg_name} {mod_seg_off:X} ");
+                                            sd.update(reloc_seg_off as usize, 4, saa);
+                                        })
+                                    }
+                                };
+                                println!("mod_seg_off: {mod_seg_off:X}");
+                                println!("XX: {:?}", mk_addr_4(mod_seg_off));
+                            }
+                        };
+                    }
+                    RelType::R4 => {}
+                    RelType::AS4 => {}
+                    RelType::RS4 => {}
+                    RelType::U2 => {}
+                    RelType::L2 => {}
+                }
             }
         }
+        Ok(())
     }
 }

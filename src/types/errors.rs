@@ -43,6 +43,7 @@ pub enum LinkError {
     DuplicateObjectError,
     MultipleSymbolDefinitions,
     UndefinedSymbolError,
+    AddressOverflowError,
 }
 
 #[derive(Debug, PartialEq, Eq)]

@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::ops::Deref;
 
 use crate::types::object::MAGIC_NUMBER;
 use crate::types::segment::*;
@@ -50,6 +51,11 @@ impl ObjectOut {
                         segment_data.len(),
                         segment_name
                     ));
+                    let mut ppr_data = vec![];
+                    for d in segment_data.deref().iter() {
+                        ppr_data.push(format!("{d:02X}"));
+                    }
+                    code_and_data.push(ppr_data.join(" "));
                 }
             }
         }
