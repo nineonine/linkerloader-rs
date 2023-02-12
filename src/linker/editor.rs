@@ -64,6 +64,7 @@ pub enum Endianness {
     BigEndian,
     LittleEndian,
 }
+
 pub struct LinkerEditor {
     text_start: i32,
     data_start_boundary: i32,
