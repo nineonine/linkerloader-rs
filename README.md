@@ -13,7 +13,7 @@ Module objects consist entirely of lines of ASCII text. This makes it possible t
 * Object linking
 * Object (De)Serialization
 * static libraries (both: directory and single file format)
-* Relocations (A4)
+* Relocations (A4, R4, AS4)
 
 **TODO:**
 * cli interface

@@ -575,13 +575,56 @@ impl LinkerEditor {
                                     let addend =
                                         x_to_i4(sd.get_at(loc_off as usize, 0x4).unwrap()).unwrap();
                                     let rel_addr_val = mk_i_4(next_insr_loc - mod_seg_off + addend);
-                                    println!("___ {next_insr_loc} - {mod_seg_off} + {addend} = {rel_addr_val:?}");
                                     sd.update(loc_off as usize, 4, rel_addr_val);
                                 });
                             }
                         }
                     }
-                    RelType::AS4 => {}
+                    RelType::AS4 => {
+                        match r.rel_ref {
+                            RelRef::SegmentRef(_) => panic!("run_relocations: AS4 with SegmentRef"),
+                            RelRef::SymbolRef(sym_i) => {
+                                // what symbol are we relocating? note that we are relocating reference
+                                // to the segment of module the contains that relocation entry
+                                let sym_name = &mod_obj.symbol_table[sym_i].st_name;
+                                // absolute symbol ref target address
+                                let mod_sym_off = info
+                                    .global_symtable
+                                    .get(sym_name)
+                                    .unwrap()
+                                    .0
+                                    .as_ref()
+                                    .unwrap()
+                                    .2
+                                    .unwrap();
+                                let loc_off = *info
+                                    .segment_mapping
+                                    .get(modname)
+                                    .unwrap()
+                                    .get(&r.rel_seg)
+                                    .unwrap()
+                                    + r.rel_loc
+                                    - out.segments.get(&r.rel_seg).unwrap().segment_start;
+                                let addend = x_to_i4(
+                                    out.object_data
+                                        .get(&r.rel_seg)
+                                        .unwrap()
+                                        .get_at(loc_off as usize, 0x4)
+                                        .unwrap(),
+                                )
+                                .unwrap();
+                                match mk_addr_4((mod_sym_off + addend) as usize) {
+                                    None => return Err(LinkError::AddressOverflowError),
+                                    Some(v) => {
+                                        // fix up the code!
+                                        out.object_data.entry(r.rel_seg.clone()).and_modify(|sd| {
+                                            sd.update(loc_off as usize, 4, v);
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
                     RelType::RS4 => {}
                     RelType::U2 => {}
                     RelType::L2 => {}

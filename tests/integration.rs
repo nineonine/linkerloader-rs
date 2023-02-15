@@ -933,3 +933,22 @@ fn run_relocations_r4() {
         Err(e) => panic!("{testdir} {e:?}"),
     }
 }
+
+#[test]
+fn run_relocations_as4() {
+    let testdir = tests_base_loc("run_relocations_AS4");
+    let objects = read_objects_from_dir(&testdir);
+    let mut editor = LinkerEditor::new(0xFF, 0x0, 0x0, false);
+    match editor.link(objects, NO_STATIC_LIBS) {
+        Ok((out, info)) => {
+            println!("{out:?}");
+            println!("{info:?}");
+            let obj_code_text = out.object_data.get(&SegmentName::TEXT).unwrap();
+            assert_eq!(
+                0xFF,
+                x_to_i4(obj_code_text.get_at(0x10, 0x4).unwrap()).unwrap()
+            );
+        }
+        Err(e) => panic!("{testdir} {e:?}"),
+    }
+}
