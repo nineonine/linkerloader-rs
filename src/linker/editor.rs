@@ -8,7 +8,7 @@ use crate::types::out::ObjectOut;
 use crate::types::relocation::{RelRef, RelType};
 use crate::types::segment::{Segment, SegmentName};
 use crate::types::symbol_table::{SymbolName, SymbolTableEntry};
-use crate::utils::{find_seg_start, mk_addr_4};
+use crate::utils::{find_seg_start, mk_addr_4, mk_i_4, x_to_i4};
 
 type Defn = (ObjectID, usize, Option<i32>);
 type Refs = HashMap<ObjectID, usize>;
@@ -508,7 +508,7 @@ impl LinkerEditor {
                     }
                 };
                 self.logger.debug(&format!(
-                    "Relocation {} of {reloc_entity} reference at offset {:X} (segment {})",
+                    "Relocation {} of {reloc_entity} reference at offset 0x{:X} (segment {})",
                     r.rel_type, r.rel_loc, r.rel_seg
                 ));
                 match r.rel_type {
@@ -516,34 +516,71 @@ impl LinkerEditor {
                         match r.rel_ref {
                             RelRef::SymbolRef(_) => panic!("run_relocations: A4 with SymbolRef"),
                             RelRef::SegmentRef(seg_i) => {
-                                // where does relocation happen?
+                                // what segment are we relocating? note that we are relocating reference
+                                // to the segment of module the contains that relocation entry
                                 let seg_name = mod_obj.segments[seg_i].segment_name.clone();
-                                // absolute segment ref / address
+                                // absolute segment ref target address
                                 let mod_seg_off = *info
                                     .segment_mapping
                                     .get(modname)
                                     .unwrap()
                                     .get(&seg_name)
                                     .unwrap();
-                                match mk_addr_4(mod_seg_off) {
+                                match mk_addr_4(mod_seg_off as usize) {
                                     None => return Err(LinkError::AddressOverflowError),
                                     Some(saa) => {
+                                        // fix up the code!
                                         out.object_data.entry(r.rel_seg.clone()).and_modify(|sd| {
                                             let reloc_seg_start =
-                                                out.segments.get(&r.rel_seg).unwrap().segment_start;
-                                            let reloc_seg_off =
-                                                reloc_seg_start + r.rel_loc - self.text_start;
-                                            println!("{r:?} {seg_name} {mod_seg_off:X} ");
+                                                out.segments.get(&r.rel_seg).unwrap().segment_start
+                                                    - info
+                                                        .segment_mapping
+                                                        .get(modname)
+                                                        .unwrap()
+                                                        .get(&r.rel_seg)
+                                                        .unwrap();
+                                            let reloc_seg_off = reloc_seg_start + r.rel_loc;
                                             sd.update(reloc_seg_off as usize, 4, saa);
                                         })
                                     }
                                 };
-                                println!("mod_seg_off: {mod_seg_off:X}");
-                                println!("XX: {:?}", mk_addr_4(mod_seg_off));
                             }
                         };
                     }
-                    RelType::R4 => {}
+                    RelType::R4 => {
+                        match r.rel_ref {
+                            RelRef::SymbolRef(_) => panic!("run_relocations: R4 with SymbolRef"),
+                            RelRef::SegmentRef(seg_i) => {
+                                let seg_name = mod_obj.segments[seg_i].segment_name.clone();
+                                let mod_seg_off = *info
+                                    .segment_mapping
+                                    .get(modname)
+                                    .unwrap()
+                                    .get(&seg_name)
+                                    .unwrap();
+                                // relocation loc + 4
+                                let next_insr_loc = *info
+                                    .segment_mapping
+                                    .get(modname)
+                                    .unwrap()
+                                    .get(&r.rel_seg)
+                                    .unwrap()
+                                    + r.rel_loc
+                                    + 4;
+                                // fix up the code!
+                                out.object_data.entry(r.rel_seg.clone()).and_modify(|sd| {
+                                    let loc_off = next_insr_loc
+                                        - 4
+                                        - out.segments.get(&r.rel_seg).unwrap().segment_start;
+                                    let addend =
+                                        x_to_i4(sd.get_at(loc_off as usize, 0x4).unwrap()).unwrap();
+                                    let rel_addr_val = mk_i_4(next_insr_loc - mod_seg_off + addend);
+                                    println!("___ {next_insr_loc} - {mod_seg_off} + {addend} = {rel_addr_val:?}");
+                                    sd.update(loc_off as usize, 4, rel_addr_val);
+                                });
+                            }
+                        }
+                    }
                     RelType::AS4 => {}
                     RelType::RS4 => {}
                     RelType::U2 => {}

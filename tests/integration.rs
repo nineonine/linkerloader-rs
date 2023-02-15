@@ -11,7 +11,7 @@ use linkerloader::types::object::MAGIC_NUMBER;
 use linkerloader::types::relocation::{RelRef, RelType, Relocation};
 use linkerloader::types::segment::{SegmentDescr, SegmentName};
 use linkerloader::types::symbol_table::{SymbolTableEntry, SymbolTableEntryType};
-use linkerloader::utils::{addr_4_to_i, read_object_file};
+use linkerloader::utils::{read_object_file, x_to_i4};
 
 const TESTS_DIR: &'static str = "tests/input/";
 const NO_STATIC_LIBS: Vec<StaticLib> = vec![];
@@ -907,10 +907,29 @@ fn run_relocations_a4() {
             println!("{info:?}");
             let obj_code_text = out.object_data.get(&SegmentName::TEXT).unwrap();
             assert_eq!(
-                0x014B,
-                addr_4_to_i(obj_code_text.get_at(0x4, 0x2).unwrap()).unwrap()
+                0x14B,
+                x_to_i4(obj_code_text.get_at(0x4, 0x4).unwrap()).unwrap()
             );
         }
-        Err(_e) => panic!("{}", testdir),
+        Err(e) => panic!("{testdir} {e:?}"),
+    }
+}
+
+#[test]
+fn run_relocations_r4() {
+    let testdir = tests_base_loc("run_relocations_R4");
+    let objects = read_objects_from_dir(&testdir);
+    let mut editor = LinkerEditor::new(0xFF, 0x0, 0x0, false);
+    match editor.link(objects, NO_STATIC_LIBS) {
+        Ok((out, info)) => {
+            println!("{out:?}");
+            println!("{info:?}");
+            let obj_code_text = out.object_data.get(&SegmentName::TEXT).unwrap();
+            assert_eq!(
+                -36,
+                x_to_i4(obj_code_text.get_at(0xA, 0x4).unwrap()).unwrap()
+            );
+        }
+        Err(e) => panic!("{testdir} {e:?}"),
     }
 }

@@ -44,6 +44,7 @@ pub enum LinkError {
     MultipleSymbolDefinitions,
     UndefinedSymbolError,
     AddressOverflowError,
+    IntOverflowError,
 }
 
 #[derive(Debug, PartialEq, Eq)]

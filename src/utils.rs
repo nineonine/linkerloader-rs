@@ -28,11 +28,11 @@ pub fn count_new_lines(s: &str) -> usize {
     s.chars().filter(|&c| c == '\n').count()
 }
 
-pub fn mk_addr_4(i: i32) -> Option<Vec<u8>> {
-    if !(0..=0xFFFF).contains(&i) {
+pub fn mk_addr_4(i: usize) -> Option<Vec<u8>> {
+    if !(0..=0xFFFFFFFF).contains(&i) {
         return None;
-    } // we only support width of 4
-    let s = format!("{i:04X}");
+    } // we only support width of 4 bytes
+    let s = format!("{i:08X}");
     let mut result = vec![];
 
     for i in (0..s.len()).step_by(2) {
@@ -44,12 +44,29 @@ pub fn mk_addr_4(i: i32) -> Option<Vec<u8>> {
     Some(result)
 }
 
-pub fn addr_4_to_i(bytes: &[u8]) -> Option<i32> {
-    if bytes.len() != 2 {
-        return None;
+pub fn mk_i_4(i: i32) -> Vec<u8> {
+    let s = format!("{i:08X}");
+    let mut result = vec![];
+
+    for i in (0..s.len()).step_by(2) {
+        let pair = &s[i..i + 2];
+        let byte = u8::from_str_radix(pair, 16).unwrap();
+        result.push(byte);
     }
 
-    let hex_string = format!("{:02X}{:02X}", bytes[0], bytes[1]);
-    let result = i32::from_str_radix(&hex_string, 16).unwrap();
-    Some(result)
+    result
+}
+
+pub fn x_to_i4(bytes: &[u8]) -> Option<i32> {
+    if bytes.len() != 4 {
+        return None;
+    }
+    let hex_string = format!(
+        "{:02X}{:02X}{:02X}{:02X}",
+        bytes[0], bytes[1], bytes[2], bytes[3]
+    );
+    match i64::from_str_radix(&hex_string, 16) {
+        Err(_) => None,
+        Ok(v) => Some(v as i32),
+    }
 }
