@@ -625,7 +625,47 @@ impl LinkerEditor {
                             }
                         }
                     }
-                    RelType::RS4 => {}
+                    RelType::RS4 => match r.rel_ref {
+                        RelRef::SegmentRef(_) => panic!("run_relocations: RS4 with SegmentRef"),
+                        RelRef::SymbolRef(sym_i) => {
+                            let sym_name = &mod_obj.symbol_table[sym_i].st_name;
+                            // absolute symbol ref target address
+                            let mod_sym_off = info
+                                .global_symtable
+                                .get(sym_name)
+                                .unwrap()
+                                .0
+                                .as_ref()
+                                .unwrap()
+                                .2
+                                .unwrap();
+                            let loc_addr = *info
+                                .segment_mapping
+                                .get(modname)
+                                .unwrap()
+                                .get(&r.rel_seg)
+                                .unwrap();
+                            let loc_off = loc_addr + r.rel_loc
+                                - out.segments.get(&r.rel_seg).unwrap().segment_start;
+                            let addend = x_to_i4(
+                                out.object_data
+                                    .get(&r.rel_seg)
+                                    .unwrap()
+                                    .get_at(loc_off as usize, 0x4)
+                                    .unwrap(),
+                            )
+                            .unwrap();
+                            // fix up the code!
+                            out.object_data.entry(r.rel_seg.clone()).and_modify(|sd| {
+                                let rel_addr_val = mk_i_4(loc_addr + 4 - mod_sym_off + addend);
+                                println!(
+                                    "setting {rel_addr_val:?} at {loc_off:X} value {}",
+                                    loc_addr + 4 - mod_sym_off
+                                );
+                                sd.update(loc_off as usize, 0x4, rel_addr_val);
+                            });
+                        }
+                    },
                     RelType::U2 => {}
                     RelType::L2 => {}
                 }
