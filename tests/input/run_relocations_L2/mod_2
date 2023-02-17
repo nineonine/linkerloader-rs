@@ -1,0 +1,12 @@
+LINK
+3 3 01
+.text 0 14 RP
+.data 16 10 PWR
+.bss 1F 4 RW
+from_mod2 0 1 D
+another_from_mod2 8 1 D
+foo 0 0 U
+A 1 3 RS4
+00 00 C4 2A 27 75 B4 F5 06 AA 00 00 00 00 BB D0 E9 B6 2C 4C
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00

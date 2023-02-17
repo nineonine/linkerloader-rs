@@ -991,3 +991,22 @@ fn run_relocation_u2() {
         Err(e) => panic!("{testdir} {e:?}"),
     }
 }
+
+#[test]
+fn run_relocation_l2() {
+    let testdir = tests_base_loc("run_relocations_L2");
+    let objects = read_objects_from_dir(&testdir);
+    let mut editor = LinkerEditor::new(0xFF, 0x0, 0x0, false);
+    match editor.link(objects, NO_STATIC_LIBS) {
+        Ok((out, info)) => {
+            println!("{out:?}");
+            println!("{info:?}");
+            let obj_code_data = out.object_data.get(&SegmentName::DATA).unwrap();
+            assert_eq!(
+                0x011D,
+                x_to_i2(obj_code_data.get_at(0x8, 0x2).unwrap()).unwrap()
+            );
+        }
+        Err(e) => panic!("{testdir} {e:?}"),
+    }
+}
