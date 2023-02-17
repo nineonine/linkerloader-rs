@@ -11,7 +11,7 @@ use linkerloader::types::object::MAGIC_NUMBER;
 use linkerloader::types::relocation::{RelRef, RelType, Relocation};
 use linkerloader::types::segment::{SegmentDescr, SegmentName};
 use linkerloader::types::symbol_table::{SymbolTableEntry, SymbolTableEntryType};
-use linkerloader::utils::{read_object_file, x_to_i4};
+use linkerloader::utils::{read_object_file, x_to_i2, x_to_i4};
 
 const TESTS_DIR: &'static str = "tests/input/";
 const NO_STATIC_LIBS: Vec<StaticLib> = vec![];
@@ -971,6 +971,22 @@ fn run_relocation_rs4() {
                 34,
                 x_to_i4(obj_code_text.get_at(0x28, 0x4).unwrap()).unwrap()
             );
+        }
+        Err(e) => panic!("{testdir} {e:?}"),
+    }
+}
+
+#[test]
+fn run_relocation_u2() {
+    let testdir = tests_base_loc("run_relocations_U2");
+    let objects = read_objects_from_dir(&testdir);
+    let mut editor = LinkerEditor::new(0xFF, 0x0, 0x0, false);
+    match editor.link(objects, NO_STATIC_LIBS) {
+        Ok((out, info)) => {
+            println!("{out:?}");
+            println!("{info:?}");
+            let obj_code_data = out.object_data.get(&SegmentName::DATA).unwrap();
+            assert_eq!(0, x_to_i2(obj_code_data.get_at(0x0, 0x2).unwrap()).unwrap());
         }
         Err(e) => panic!("{testdir} {e:?}"),
     }

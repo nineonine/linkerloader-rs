@@ -31,7 +31,7 @@ pub fn count_new_lines(s: &str) -> usize {
 pub fn mk_addr_4(i: usize) -> Option<Vec<u8>> {
     if !(0..=0xFFFFFFFF).contains(&i) {
         return None;
-    } // we only support width of 4 bytes
+    }
     let s = format!("{i:08X}");
     let mut result = vec![];
 
@@ -65,6 +65,17 @@ pub fn x_to_i4(bytes: &[u8]) -> Option<i32> {
         "{:02X}{:02X}{:02X}{:02X}",
         bytes[0], bytes[1], bytes[2], bytes[3]
     );
+    match i64::from_str_radix(&hex_string, 16) {
+        Err(_) => None,
+        Ok(v) => Some(v as i32),
+    }
+}
+
+pub fn x_to_i2(bytes: &[u8]) -> Option<i32> {
+    if bytes.len() != 2 {
+        return None;
+    }
+    let hex_string = format!("{:02X}{:02X}", bytes[0], bytes[1]);
     match i64::from_str_radix(&hex_string, 16) {
         Err(_) => None,
         Ok(v) => Some(v as i32),

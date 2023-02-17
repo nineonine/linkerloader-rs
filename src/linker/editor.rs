@@ -103,7 +103,7 @@ impl LinkerEditor {
             bss_start_boundary,
             logger: Logger::new_stdout_logger(silent),
             session_objects: BTreeMap::new(),
-            _endianness: Endianness::BigEndian,
+            _endianness: Endianness::BigEndian, // always BigEndian now ...
         };
         r.print_linker_editor_cfg();
         r
@@ -659,14 +659,55 @@ impl LinkerEditor {
                             out.object_data.entry(r.rel_seg.clone()).and_modify(|sd| {
                                 let rel_addr_val = mk_i_4(loc_addr + 4 - mod_sym_off + addend);
                                 println!(
-                                    "setting {rel_addr_val:?} at {loc_off:X} value {}",
+                                    "setting {rel_addr_val:?} value {}",
                                     loc_addr + 4 - mod_sym_off
                                 );
                                 sd.update(loc_off as usize, 0x4, rel_addr_val);
                             });
                         }
                     },
-                    RelType::U2 => {}
+                    RelType::U2 => {
+                        match r.rel_ref {
+                            RelRef::SegmentRef(_) => panic!("run_relocations: U2 with SegmentRef"),
+                            RelRef::SymbolRef(sym_i) => {
+                                // what symbol are we relocating? note that we are relocating reference
+                                // to the segment of module the contains that relocation entry
+                                let sym_name = &mod_obj.symbol_table[sym_i].st_name;
+                                // absolute symbol ref target address
+                                let mod_sym_off = info
+                                    .global_symtable
+                                    .get(sym_name)
+                                    .unwrap()
+                                    .0
+                                    .as_ref()
+                                    .unwrap()
+                                    .2
+                                    .unwrap();
+                                let loc_addr = *info
+                                    .segment_mapping
+                                    .get(modname)
+                                    .unwrap()
+                                    .get(&r.rel_seg)
+                                    .unwrap();
+                                let loc_off = loc_addr + r.rel_loc
+                                    - out.segments.get(&r.rel_seg).unwrap().segment_start;
+                                match mk_addr_4(mod_sym_off as usize) {
+                                    None => return Err(LinkError::AddressOverflowError),
+                                    Some(v) => {
+                                        // fix up the code!
+                                        out.object_data.entry(r.rel_seg.clone()).and_modify(|sd| {
+                                            println!(
+                                                "mod_sym_addr: {:?} setting {:?}",
+                                                mk_i_4(mod_sym_off),
+                                                &v[0..2]
+                                            );
+                                            sd.update(loc_off as usize, 2, v[0..2].to_vec());
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
                     RelType::L2 => {}
                 }
             }
