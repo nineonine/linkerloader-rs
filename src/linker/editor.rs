@@ -8,7 +8,7 @@ use crate::types::out::ObjectOut;
 use crate::types::relocation::{RelRef, RelType};
 use crate::types::segment::{Segment, SegmentName};
 use crate::types::symbol_table::{SymbolName, SymbolTableEntry};
-use crate::utils::{find_seg_start, mk_addr_4, mk_i_4, x_to_i4};
+use crate::utils::{find_seg_start, mk_addr_4, mk_i_4, x_to_i2, x_to_i4};
 
 type Defn = (ObjectID, usize, Option<i32>);
 type Refs = HashMap<ObjectID, usize>;
@@ -540,6 +540,8 @@ impl LinkerEditor {
                                                         .get(&r.rel_seg)
                                                         .unwrap();
                                             let reloc_seg_off = reloc_seg_start + r.rel_loc;
+                                            self.logger
+                                                .debug(&format!("  Setting 0x{mod_seg_off:08X}"));
                                             sd.update(reloc_seg_off as usize, 4, saa);
                                         })
                                     }
@@ -575,6 +577,10 @@ impl LinkerEditor {
                                     let addend =
                                         x_to_i4(sd.get_at(loc_off as usize, 0x4).unwrap()).unwrap();
                                     let rel_addr_val = mk_i_4(next_insr_loc - mod_seg_off + addend);
+                                    self.logger.debug(&format!(
+                                        "  Setting 0x{:08X}",
+                                        next_insr_loc - mod_seg_off + addend
+                                    ));
                                     sd.update(loc_off as usize, 4, rel_addr_val);
                                 });
                             }
@@ -618,6 +624,10 @@ impl LinkerEditor {
                                     Some(v) => {
                                         // fix up the code!
                                         out.object_data.entry(r.rel_seg.clone()).and_modify(|sd| {
+                                            self.logger.debug(&format!(
+                                                "  Setting 0x{:08X}",
+                                                mod_sym_off + addend
+                                            ));
                                             sd.update(loc_off as usize, 4, v);
                                         });
                                     }
@@ -658,10 +668,10 @@ impl LinkerEditor {
                             // fix up the code!
                             out.object_data.entry(r.rel_seg.clone()).and_modify(|sd| {
                                 let rel_addr_val = mk_i_4(loc_addr + 4 - mod_sym_off + addend);
-                                println!(
-                                    "setting {rel_addr_val:?} value {}",
-                                    loc_addr + 4 - mod_sym_off
-                                );
+                                self.logger.debug(&format!(
+                                    "  Setting 0x{:08X}",
+                                    loc_addr + 4 - mod_sym_off + addend
+                                ));
                                 sd.update(loc_off as usize, 0x4, rel_addr_val);
                             });
                         }
@@ -696,11 +706,10 @@ impl LinkerEditor {
                                     Some(v) => {
                                         // fix up the code!
                                         out.object_data.entry(r.rel_seg.clone()).and_modify(|sd| {
-                                            println!(
-                                                "mod_sym_addr: {:?} setting {:?}",
-                                                mk_i_4(mod_sym_off),
-                                                &v[0..2]
-                                            );
+                                            self.logger.debug(&format!(
+                                                "  Setting 0x{:04X}",
+                                                x_to_i2(&v[0..2]).unwrap()
+                                            ));
                                             sd.update(loc_off as usize, 2, v[0..2].to_vec());
                                         });
                                     }
@@ -738,11 +747,10 @@ impl LinkerEditor {
                                     Some(v) => {
                                         // fix up the code!
                                         out.object_data.entry(r.rel_seg.clone()).and_modify(|sd| {
-                                            println!(
-                                                "mod_sym_addr: {:?} setting {:?}",
-                                                mk_i_4(mod_sym_off),
-                                                &v[2..4]
-                                            );
+                                            self.logger.debug(&format!(
+                                                "  Setting 0x{:04X}",
+                                                x_to_i2(&v[2..4]).unwrap()
+                                            ));
                                             sd.update(loc_off as usize, 2, v[2..4].to_vec());
                                         });
                                     }
