@@ -8,6 +8,8 @@ use crate::types::relocation::{parse_relocation, Relocation};
 use crate::types::segment::{parse_segment, parse_segment_data, Segment, SegmentData};
 use crate::types::symbol_table::{parse_symbol_table_entry, SymbolTableEntry};
 
+use super::symbol_table::{SymbolName, SymbolTableEntryType};
+
 #[derive(Debug, Clone)]
 pub struct ObjectIn {
     pub nsegs: i32,
@@ -48,9 +50,16 @@ impl ObjectIn {
 
         let mut stes = vec![];
         for ste in self.symbol_table.iter() {
+            let name = match &ste.st_name {
+                SymbolName::SName(s) => s.to_owned(),
+                SymbolName::WrappedSName(s) => match &ste.st_type {
+                    SymbolTableEntryType::D => format!("real_{s}"),
+                    SymbolTableEntryType::U => format!("wrap_{s}"),
+                },
+            };
             stes.push(format!(
-                "{} {:X} {:X} {}",
-                ste.st_name, ste.st_value, ste.st_seg, ste.st_type
+                "{name} {:X} {:X} {}",
+                ste.st_value, ste.st_seg, ste.st_type
             ))
         }
         s.push_str(stes.join("\n").as_str());

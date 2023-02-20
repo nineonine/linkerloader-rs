@@ -10,11 +10,13 @@ use linkerloader::types::library::StaticLib;
 use linkerloader::types::object::MAGIC_NUMBER;
 use linkerloader::types::relocation::{RelRef, RelType, Relocation};
 use linkerloader::types::segment::{SegmentDescr, SegmentName};
-use linkerloader::types::symbol_table::{SymbolTableEntry, SymbolTableEntryType};
+use linkerloader::types::symbol_table::{SymbolName, SymbolTableEntry, SymbolTableEntryType};
 use linkerloader::utils::{read_object_file, x_to_i2, x_to_i4};
+use linkerloader::{symbol, wrapped_symbol};
 
 const TESTS_DIR: &'static str = "tests/input/";
 const NO_STATIC_LIBS: Vec<StaticLib> = vec![];
+const NO_WRAP_ROUTINES: Vec<SymbolName> = vec![];
 
 fn ensure_clean_state(path: &str) {
     ensure_clean_state_extra(path, vec![]);
@@ -74,7 +76,7 @@ fn test_failure(e0: ParseError, fp: &str) {
 fn multi_object_test(dirname: &str) {
     let objects = read_objects_from_dir(&tests_base_loc(dirname));
     let mut editor = LinkerEditor::new(0x100, 0x100, 0x4, false);
-    match editor.link(objects, NO_STATIC_LIBS) {
+    match editor.link(objects, NO_STATIC_LIBS, NO_WRAP_ROUTINES) {
         Ok((out, _info)) => {
             assert_eq!(out.nsegs as usize, out.segments.len());
             assert_eq!(out.object_data.len(), out.segments.len());
@@ -305,12 +307,12 @@ fn symbol_table() {
         Ok(obj) => {
             assert_eq!(obj.nsyms, obj.symbol_table.len() as i32);
             let ste1: &SymbolTableEntry = &obj.symbol_table[0];
-            assert_eq!("foo", ste1.st_name);
+            assert_eq!("foo", ste1.st_name.deref());
             assert_eq!(0x1a, ste1.st_value);
             assert_eq!(1, ste1.st_seg); // 2500 decimal
             assert_eq!(SymbolTableEntryType::D, ste1.st_type);
             let ste2: &SymbolTableEntry = &obj.symbol_table[1];
-            assert_eq!("bas", ste2.st_name);
+            assert_eq!("bas", ste2.st_name.deref());
             assert_eq!(0x2b, ste2.st_value);
             assert_eq!(0, ste2.st_seg); // 2500 decimal
             assert_eq!(SymbolTableEntryType::U, ste2.st_type);
@@ -446,7 +448,7 @@ fn common_block_1() {
     let dirname = "common_block_1";
     let objects = read_objects_from_dir(&tests_base_loc(dirname));
     let mut editor = LinkerEditor::new(0x10, 0x10, 0x4, false);
-    match editor.link(objects, NO_STATIC_LIBS) {
+    match editor.link(objects, NO_STATIC_LIBS, NO_WRAP_ROUTINES) {
         Ok((out, info)) => {
             assert_eq!(3, info.common_block_mapping.len());
             assert_eq!(out.object_data.len(), out.segments.len());
@@ -473,7 +475,7 @@ fn common_block_bigger_size() {
     let dirname = "common_block_bigger_size";
     let objects = read_objects_from_dir(&tests_base_loc(dirname));
     let mut editor = LinkerEditor::new(0x10, 0x10, 0x4, false);
-    match editor.link(objects, NO_STATIC_LIBS) {
+    match editor.link(objects, NO_STATIC_LIBS, NO_WRAP_ROUTINES) {
         Ok((out, info)) => {
             assert_eq!(1, info.common_block_mapping.len());
             assert_eq!(out.nsegs as usize, out.segments.len());
@@ -494,17 +496,17 @@ fn symbol_name_resolution_1() {
     let dirname = "symbol_name_resolution_1";
     let objects = read_objects_from_dir(&tests_base_loc(dirname));
     let mut editor = LinkerEditor::new(0x10, 0x10, 0x4, false);
-    match editor.link(objects, NO_STATIC_LIBS) {
+    match editor.link(objects, NO_STATIC_LIBS, NO_WRAP_ROUTINES) {
         Ok((_out, info)) => {
             assert_eq!(2, info.global_symtable.len());
-            assert!(info.global_symtable.contains_key("foo"));
-            assert!(info.global_symtable.contains_key("bar"));
-            let foo_ste = info.global_symtable.get("foo").unwrap().clone();
+            assert!(info.global_symtable.contains_key(&symbol!("foo")));
+            assert!(info.global_symtable.contains_key(&symbol!("bar")));
+            let foo_ste = info.global_symtable.get(&symbol!("foo")).unwrap().clone();
             assert_eq!("mod_2", foo_ste.0.as_ref().unwrap().0);
             assert_eq!(0, foo_ste.0.as_ref().unwrap().1);
             assert!(foo_ste.1.contains_key("mod_1"));
             assert_eq!(0, *foo_ste.1.get("mod_1").unwrap());
-            let bar_ste = info.global_symtable.get("bar").unwrap().clone();
+            let bar_ste = info.global_symtable.get(&symbol!("bar")).unwrap().clone();
             assert_eq!("mod_1", bar_ste.0.as_ref().unwrap().0);
             assert_eq!(1, bar_ste.0.as_ref().unwrap().1);
             assert!(bar_ste.1.contains_key("mod_2"));
@@ -519,7 +521,7 @@ fn multiple_symbol_defns() {
     let dirname = "multiple_symbol_defns";
     let objects = read_objects_from_dir(&tests_base_loc(dirname));
     let mut editor = LinkerEditor::new(0x10, 0x10, 0x4, false);
-    match editor.link(objects, NO_STATIC_LIBS) {
+    match editor.link(objects, NO_STATIC_LIBS, NO_WRAP_ROUTINES) {
         Err(e) => assert_eq!(LinkError::MultipleSymbolDefinitions, e),
         _ => panic!("{}", dirname),
     }
@@ -530,7 +532,7 @@ fn undefined_symbol() {
     let dirname = "undefined_symbol";
     let objects = read_objects_from_dir(&tests_base_loc(dirname));
     let mut editor = LinkerEditor::new(0x10, 0x10, 0x4, false);
-    match editor.link(objects, vec![]) {
+    match editor.link(objects, NO_STATIC_LIBS, NO_WRAP_ROUTINES) {
         Err(e) => assert_eq!(LinkError::UndefinedSymbolError, e),
         _ => panic!("{}", dirname),
     }
@@ -542,13 +544,13 @@ fn symbol_value_resolution() {
     let objects = read_objects_from_dir(&tests_base_loc(dirname));
     let text_start = 0x10;
     let mut editor = LinkerEditor::new(text_start, 0x10, 0x4, false);
-    match editor.link(objects, NO_STATIC_LIBS) {
+    match editor.link(objects, NO_STATIC_LIBS, NO_WRAP_ROUTINES) {
         Ok((_out, info)) => {
             println!("{:?}", info);
             assert_eq!(3, info.global_symtable.len());
             let foo_abs_addr = info
                 .global_symtable
-                .get("foo")
+                .get(&symbol!("foo"))
                 .unwrap()
                 .0
                 .clone()
@@ -558,7 +560,7 @@ fn symbol_value_resolution() {
             assert_eq!(0x20, foo_abs_addr);
             let bar_abs_addr = info
                 .global_symtable
-                .get("bar")
+                .get(&symbol!("bar"))
                 .unwrap()
                 .0
                 .clone()
@@ -568,7 +570,7 @@ fn symbol_value_resolution() {
             assert_eq!(0x5A + 0x5, bar_abs_addr);
             let baz_abs_addr = info
                 .global_symtable
-                .get("baz")
+                .get(&symbol!("baz"))
                 .unwrap()
                 .0
                 .clone()
@@ -588,12 +590,15 @@ fn static_lib_dir() {
         Ok(StaticLib::DirLib { symbols, .. }) => {
             assert_eq!(3, symbols.len());
             assert!(symbols.contains_key("libmod_1"));
-            assert!(symbols.get("libmod_1").unwrap().contains("foo"));
-            assert!(symbols.get("libmod_1").unwrap().contains("another_foo"));
+            assert!(symbols.get("libmod_1").unwrap().contains(&symbol!("foo")));
+            assert!(symbols
+                .get("libmod_1")
+                .unwrap()
+                .contains(&symbol!("another_foo")));
             assert!(symbols.contains_key("libmod_2"));
-            assert!(symbols.get("libmod_2").unwrap().contains("bar"));
+            assert!(symbols.get("libmod_2").unwrap().contains(&symbol!("bar")));
             assert!(symbols.contains_key("libmod_3"));
-            assert!(symbols.get("libmod_3").unwrap().contains("baz"));
+            assert!(symbols.get("libmod_3").unwrap().contains(&symbol!("baz")));
         }
         Ok(StaticLib::FileLib { .. }) => panic!("unexpected StaticLib::FileLib"),
         Err(e) => panic!("{}: {:?}", dirname, e),
@@ -606,10 +611,10 @@ fn static_lib_file() {
     match read_lib(&tests_base_loc(dirname)) {
         Ok(StaticLib::FileLib { symbols, .. }) => {
             assert_eq!(4, symbols.len());
-            assert_eq!(0, *symbols.get("foo").unwrap());
-            assert_eq!(0, *symbols.get("another_foo").unwrap());
-            assert_eq!(1, *symbols.get("bar").unwrap());
-            assert_eq!(2, *symbols.get("baz").unwrap());
+            assert_eq!(0, *symbols.get(&symbol!("foo")).unwrap());
+            assert_eq!(0, *symbols.get(&symbol!("another_foo")).unwrap());
+            assert_eq!(1, *symbols.get(&symbol!("bar")).unwrap());
+            assert_eq!(2, *symbols.get(&symbol!("baz")).unwrap());
         }
         Ok(StaticLib::DirLib { .. }) => panic!("unexpected StaticLib::DirLib"),
         Err(e) => panic!("{}: {:?}", dirname, e),
@@ -631,12 +636,15 @@ fn build_static_lib_dir() {
                 Ok(StaticLib::DirLib { symbols, .. }) => {
                     assert_eq!(3, symbols.len());
                     assert!(symbols.contains_key("libmod_1"));
-                    assert!(symbols.get("libmod_1").unwrap().contains("foo"));
-                    assert!(symbols.get("libmod_1").unwrap().contains("another_foo"));
+                    assert!(symbols.get("libmod_1").unwrap().contains(&symbol!("foo")));
+                    assert!(symbols
+                        .get("libmod_1")
+                        .unwrap()
+                        .contains(&symbol!("another_foo")));
                     assert!(symbols.contains_key("libmod_2"));
-                    assert!(symbols.get("libmod_2").unwrap().contains("bar"));
+                    assert!(symbols.get("libmod_2").unwrap().contains(&symbol!("bar")));
                     assert!(symbols.contains_key("libmod_3"));
-                    assert!(symbols.get("libmod_3").unwrap().contains("baz"));
+                    assert!(symbols.get("libmod_3").unwrap().contains(&symbol!("baz")));
                 }
                 Ok(StaticLib::FileLib { .. }) => panic!("unexpected StaticLib::FileLib"),
                 Err(e) => panic!("build_static_lib_dir: {e:?}"),
@@ -660,16 +668,16 @@ fn build_static_lib_file() {
             match read_lib(lib_loc.to_str().unwrap()) {
                 Ok(StaticLib::FileLib { symbols, .. }) => {
                     assert_eq!(4, symbols.len());
-                    assert!(symbols.contains_key("foo"));
-                    assert!(symbols.contains_key("another_foo"));
-                    assert!(symbols.contains_key("bar"));
-                    assert!(symbols.contains_key("baz"));
-                    assert!(!symbols.contains_key("random"));
+                    assert!(symbols.contains_key(&symbol!("foo")));
+                    assert!(symbols.contains_key(&symbol!("another_foo")));
+                    assert!(symbols.contains_key(&symbol!("bar")));
+                    assert!(symbols.contains_key(&symbol!("baz")));
+                    assert!(!symbols.contains_key(&symbol!("random")));
                     assert_eq!(4, symbols.len());
-                    assert_eq!(0, *symbols.get("foo").unwrap());
-                    assert_eq!(0, *symbols.get("another_foo").unwrap());
-                    assert_eq!(1, *symbols.get("bar").unwrap());
-                    assert_eq!(2, *symbols.get("baz").unwrap());
+                    assert_eq!(0, *symbols.get(&symbol!("foo")).unwrap());
+                    assert_eq!(0, *symbols.get(&symbol!("another_foo")).unwrap());
+                    assert_eq!(1, *symbols.get(&symbol!("bar")).unwrap());
+                    assert_eq!(2, *symbols.get(&symbol!("baz")).unwrap());
                 }
                 Ok(StaticLib::DirLib { .. }) => panic!("unexpected StaticLib::DirLib"),
                 Err(e) => panic!("build_static_lib_file: {e:?}"),
@@ -699,14 +707,14 @@ fn link_with_static_libs() {
     let mut editor = LinkerEditor::new(text_start, 0x10, 0x4, false);
     let mod_names = vec!["mod_1", "mod_2", "mod_3"];
     let objects = read_objects(&base_loc, mod_names);
-    match editor.link(objects, vec![staticlib]) {
+    match editor.link(objects, vec![staticlib], NO_WRAP_ROUTINES) {
         Ok((out, info)) => {
             println!("{info:?}");
             assert_eq!(5, info.symbol_tables.len());
             assert_eq!(7, info.global_symtable.len());
-            assert!(info.global_symtable.get("malloc").is_some());
-            assert!(info.global_symtable.get("printf").is_some());
-            assert!(info.global_symtable.get("noway").is_none());
+            assert!(info.global_symtable.get(&symbol!("malloc")).is_some());
+            assert!(info.global_symtable.get(&symbol!("printf")).is_some());
+            assert!(info.global_symtable.get(&symbol!("noway")).is_none());
             let text_seg_len = out.segments.get(&SegmentName::TEXT).unwrap().segment_len;
             let data_seg_len = out.segments.get(&SegmentName::DATA).unwrap().segment_len;
             let bss_seg_len = out.segments.get(&SegmentName::BSS).unwrap().segment_len;
@@ -757,7 +765,7 @@ fn link_with_static_libs_duplicate_symbol() {
     let mut editor = LinkerEditor::new(text_start, 0x10, 0x4, false);
     let mod_names = vec!["mod_1"];
     let objects = read_objects(&base_loc, mod_names);
-    match editor.link(objects, vec![staticlib]) {
+    match editor.link(objects, vec![staticlib], NO_WRAP_ROUTINES) {
         Err(e) => assert_eq!(LinkError::MultipleSymbolDefinitions, e),
         Ok(_) => {
             panic!("link_with_static_libs_duplicate_symbol: unexpected Ok")
@@ -790,14 +798,18 @@ fn link_with_static_libs_lib_deps() {
     let mut editor = LinkerEditor::new(text_start, 0x10, 0x4, false);
     let mod_names = vec!["mod_1"];
     let objects = read_objects(&base_loc, mod_names);
-    match editor.link(objects, vec![staticlib1_dir, staticlib2_dir]) {
+    match editor.link(
+        objects,
+        vec![staticlib1_dir, staticlib2_dir],
+        NO_WRAP_ROUTINES,
+    ) {
         Ok((_out, info)) => {
             println!("{info:?}");
             assert_eq!(3, info.symbol_tables.len());
             assert_eq!(3, info.global_symtable.len());
-            assert!(info.global_symtable.get("exec").is_some());
-            assert!(info.global_symtable.get("printf").is_some());
-            assert!(info.global_symtable.get("nope").is_none());
+            assert!(info.global_symtable.get(&symbol!("exec")).is_some());
+            assert!(info.global_symtable.get(&symbol!("printf")).is_some());
+            assert!(info.global_symtable.get(&symbol!("nope")).is_none());
         }
         Err(e) => panic!("link_with_static_libs_lib_deps: {e:?}"),
     }
@@ -829,7 +841,11 @@ fn link_with_static_libs_lib_deps_undef() {
     let mut editor = LinkerEditor::new(text_start, 0x10, 0x4, false);
     let mod_names = vec!["mod_1"];
     let objects = read_objects(&base_loc, mod_names);
-    match editor.link(objects, vec![staticlib1_dir, staticlib2_dir]) {
+    match editor.link(
+        objects,
+        vec![staticlib1_dir, staticlib2_dir],
+        NO_WRAP_ROUTINES,
+    ) {
         Err(e) => assert_eq!(LinkError::UndefinedSymbolError, e),
         Ok(_) => {
             panic!("link_with_static_libs_lib_deps_undef: unexpected Ok")
@@ -858,14 +874,14 @@ fn link_with_static_libs_single_file() {
     let mut editor = LinkerEditor::new(text_start, 0x10, 0x4, false);
     let mod_names = vec!["mod_1", "mod_2", "mod_3"];
     let objects = read_objects(&base_loc, mod_names);
-    match editor.link(objects, vec![staticlib]) {
+    match editor.link(objects, vec![staticlib], NO_WRAP_ROUTINES) {
         Ok((out, info)) => {
             println!("{info:?}");
             assert_eq!(5, info.symbol_tables.len());
             assert_eq!(7, info.global_symtable.len());
-            assert!(info.global_symtable.get("malloc").is_some());
-            assert!(info.global_symtable.get("printf").is_some());
-            assert!(info.global_symtable.get("noway").is_none());
+            assert!(info.global_symtable.get(&symbol!("malloc")).is_some());
+            assert!(info.global_symtable.get(&symbol!("printf")).is_some());
+            assert!(info.global_symtable.get(&symbol!("noway")).is_none());
             let text_seg_len = out.segments.get(&SegmentName::TEXT).unwrap().segment_len;
             let data_seg_len = out.segments.get(&SegmentName::DATA).unwrap().segment_len;
             let bss_seg_len = out.segments.get(&SegmentName::BSS).unwrap().segment_len;
@@ -901,7 +917,7 @@ fn run_relocations_a4() {
     let testdir = tests_base_loc("run_relocations_A4");
     let objects = read_objects_from_dir(&testdir);
     let mut editor = LinkerEditor::new(0xFF, 0x0, 0x0, false);
-    match editor.link(objects, NO_STATIC_LIBS) {
+    match editor.link(objects, NO_STATIC_LIBS, NO_WRAP_ROUTINES) {
         Ok((out, info)) => {
             println!("{out:?}");
             println!("{info:?}");
@@ -920,7 +936,7 @@ fn run_relocations_r4() {
     let testdir = tests_base_loc("run_relocations_R4");
     let objects = read_objects_from_dir(&testdir);
     let mut editor = LinkerEditor::new(0xFF, 0x0, 0x0, false);
-    match editor.link(objects, NO_STATIC_LIBS) {
+    match editor.link(objects, NO_STATIC_LIBS, NO_WRAP_ROUTINES) {
         Ok((out, info)) => {
             println!("{out:?}");
             println!("{info:?}");
@@ -939,7 +955,7 @@ fn run_relocations_as4() {
     let testdir = tests_base_loc("run_relocations_AS4");
     let objects = read_objects_from_dir(&testdir);
     let mut editor = LinkerEditor::new(0xFF, 0x0, 0x0, false);
-    match editor.link(objects, NO_STATIC_LIBS) {
+    match editor.link(objects, NO_STATIC_LIBS, NO_WRAP_ROUTINES) {
         Ok((out, info)) => {
             println!("{out:?}");
             println!("{info:?}");
@@ -958,7 +974,7 @@ fn run_relocation_rs4() {
     let testdir = tests_base_loc("run_relocations_RS4");
     let objects = read_objects_from_dir(&testdir);
     let mut editor = LinkerEditor::new(0xFF, 0x0, 0x0, false);
-    match editor.link(objects, NO_STATIC_LIBS) {
+    match editor.link(objects, NO_STATIC_LIBS, NO_WRAP_ROUTINES) {
         Ok((out, info)) => {
             println!("{out:?}");
             println!("{info:?}");
@@ -981,7 +997,7 @@ fn run_relocation_u2() {
     let testdir = tests_base_loc("run_relocations_U2");
     let objects = read_objects_from_dir(&testdir);
     let mut editor = LinkerEditor::new(0xFF, 0x0, 0x0, false);
-    match editor.link(objects, NO_STATIC_LIBS) {
+    match editor.link(objects, NO_STATIC_LIBS, NO_WRAP_ROUTINES) {
         Ok((out, info)) => {
             println!("{out:?}");
             println!("{info:?}");
@@ -997,7 +1013,7 @@ fn run_relocation_l2() {
     let testdir = tests_base_loc("run_relocations_L2");
     let objects = read_objects_from_dir(&testdir);
     let mut editor = LinkerEditor::new(0xFF, 0x0, 0x0, false);
-    match editor.link(objects, NO_STATIC_LIBS) {
+    match editor.link(objects, NO_STATIC_LIBS, NO_WRAP_ROUTINES) {
         Ok((out, info)) => {
             println!("{out:?}");
             println!("{info:?}");
@@ -1006,6 +1022,61 @@ fn run_relocation_l2() {
                 0x011D,
                 x_to_i2(obj_code_data.get_at(0x8, 0x2).unwrap()).unwrap()
             );
+        }
+        Err(e) => panic!("{testdir} {e:?}"),
+    }
+}
+
+#[test]
+fn wrap_routine() {
+    let testdir = tests_base_loc("wrap_routine");
+    let objects = read_objects_from_dir(&testdir);
+    let mut editor = LinkerEditor::new(0x0, 0x0, 0x0, false);
+    let wrap_routines = vec![symbol!("foo")];
+    match editor.link(objects, NO_STATIC_LIBS, wrap_routines) {
+        Ok((out, info)) => {
+            println!("{out:?}");
+            println!("{info:?}");
+            assert!(info.global_symtable.contains_key(&wrapped_symbol!("foo")));
+            assert!(!info.global_symtable.contains_key(&wrapped_symbol!("bar")));
+            assert!(!info.global_symtable.contains_key(&symbol!("foo")));
+            assert!(info.global_symtable.contains_key(&symbol!("bar")));
+            assert!(editor
+                .session_objects
+                .get("mod_1")
+                .unwrap()
+                .ppr(false)
+                .contains("real_foo"));
+            assert!(!editor
+                .session_objects
+                .get("mod_1")
+                .unwrap()
+                .ppr(false)
+                .contains("wrap_foo"));
+            assert!(editor
+                .session_objects
+                .get("mod_1")
+                .unwrap()
+                .ppr(false)
+                .contains("bar"));
+            assert!(!editor
+                .session_objects
+                .get("mod_2")
+                .unwrap()
+                .ppr(false)
+                .contains("real_bar"));
+            assert!(!editor
+                .session_objects
+                .get("mod_2")
+                .unwrap()
+                .ppr(false)
+                .contains("real_foo"));
+            assert!(editor
+                .session_objects
+                .get("mod_2")
+                .unwrap()
+                .ppr(false)
+                .contains("wrap_foo"));
         }
         Err(e) => panic!("{testdir} {e:?}"),
     }

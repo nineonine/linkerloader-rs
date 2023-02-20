@@ -1,4 +1,5 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::ops::Deref;
 
 use crate::logger::*;
 use crate::types::errors::LinkError;
@@ -69,7 +70,7 @@ pub struct LinkerEditor {
     text_start: i32,
     data_start_boundary: i32,
     bss_start_boundary: i32,
-    session_objects: BTreeMap<ObjectID, ObjectIn>,
+    pub session_objects: BTreeMap<ObjectID, ObjectIn>,
     logger: Logger,
     _endianness: Endianness,
 }
@@ -115,11 +116,15 @@ impl LinkerEditor {
     //   * update address mappings in link_info
     pub fn link(
         &mut self,
-        objs_in: BTreeMap<ObjectID, ObjectIn>,
+        mut objs_in: BTreeMap<ObjectID, ObjectIn>,
         static_libs: Vec<StaticLib>,
+        wrap_routines: Vec<SymbolName>,
     ) -> Result<(ObjectOut, LinkerInfo), LinkError> {
         let mut out = ObjectOut::new();
         let mut info = LinkerInfo::new();
+
+        // wrap specified routines
+        self.wrap_routines(&mut objs_in, &wrap_routines)?;
 
         // initial pass over input objects
         for (obj_id, obj) in objs_in.into_iter() {
@@ -136,7 +141,7 @@ impl LinkerEditor {
         // check if all definitions are in place. if not - check/link libaries
         for (name, (defn, _)) in info.global_symtable.iter() {
             if defn.is_none() {
-                undef_syms.push(name.to_string())
+                undef_syms.push(name.clone());
             }
         }
         if !undef_syms.is_empty() {
@@ -278,7 +283,7 @@ impl LinkerEditor {
                 return Some(LinkError::MultipleSymbolDefinitions);
             }
             info.global_symtable
-                .entry(symbol.st_name.to_string())
+                .entry(symbol.st_name.clone())
                 .and_modify(|(defn, refs)| {
                     if symbol.is_defined() {
                         assert!(defn.is_none());
@@ -420,7 +425,7 @@ impl LinkerEditor {
                                 continue;
                             }
                             for lib_obj_sym in lib_obj_syms.iter() {
-                                if lib_obj_sym == &undef_sym {
+                                if *lib_obj_sym == undef_sym {
                                     // found symbol definition in this lib
                                     self.logger.debug(&format!(
                                         "Found symbol '{undef_sym}' in {lib_obj_name}"
@@ -436,7 +441,7 @@ impl LinkerEditor {
                                             .insert(lib_obj_name.to_string(), lib_obj.clone());
                                         for ste in lib_obj.symbol_table.iter() {
                                             if !ste.is_defined() {
-                                                undef_syms.push(ste.st_name.to_string());
+                                                undef_syms.push(ste.st_name.clone());
                                             }
                                         }
                                         visited_libs.insert(lib_obj_name.to_string());
@@ -455,7 +460,7 @@ impl LinkerEditor {
                         libname,
                     } => {
                         for (lib_obj_sym, obj_offset) in symbols.iter() {
-                            if lib_obj_sym == &undef_sym {
+                            if *lib_obj_sym == undef_sym {
                                 // found symbol definition in this lib file
                                 if let Some(lib_obj) = objects.get(*obj_offset) {
                                     let libobj_id = format!("{libname}_mod_{obj_offset}");
@@ -472,7 +477,7 @@ impl LinkerEditor {
                                         .insert(libobj_id.to_string(), lib_obj.clone());
                                     for ste in lib_obj.symbol_table.iter() {
                                         if !ste.is_defined() {
-                                            undef_syms.push(ste.st_name.to_string());
+                                            undef_syms.push(ste.st_name.clone());
                                         }
                                     }
                                     visited_libs.insert(libobj_id);
@@ -489,14 +494,12 @@ impl LinkerEditor {
         Ok(())
     }
 
-    pub fn run_relocations(
-        &mut self,
-        out: &mut ObjectOut,
-        info: &LinkerInfo,
-    ) -> Result<(), LinkError> {
+    fn run_relocations(&mut self, out: &mut ObjectOut, info: &LinkerInfo) -> Result<(), LinkError> {
         for (modname, mod_obj) in self.session_objects.iter() {
-            self.logger
-                .debug(&format!("Running relocations for {modname:}"));
+            if !mod_obj.relocations.is_empty() {
+                self.logger
+                    .debug(&format!("Running relocations for {modname:}"));
+            }
             // println!("DEBUG: {mod_obj:?}");
             for r in mod_obj.relocations.iter() {
                 let reloc_entity = match r.rel_ref {
@@ -758,6 +761,21 @@ impl LinkerEditor {
                             }
                         }
                     }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn wrap_routines(
+        &mut self,
+        objs_in: &mut BTreeMap<ObjectID, ObjectIn>,
+        routine_names: &[SymbolName],
+    ) -> Result<(), LinkError> {
+        for (_, obj) in objs_in.iter_mut() {
+            for sym in obj.symbol_table.iter_mut() {
+                if routine_names.contains(&sym.st_name) {
+                    sym.st_name = SymbolName::WrappedSName(sym.st_name.deref().to_owned());
                 }
             }
         }

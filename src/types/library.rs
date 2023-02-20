@@ -74,10 +74,13 @@ impl StaticLib {
                 {
                     println!("reading MAP file");
                     for l in file_contents.lines() {
-                        let toks: Vec<&str> = l.split(' ').map(|s| s.trim()).collect();
+                        let toks: Vec<String> = l.split(' ').map(|s| s.trim().to_owned()).collect();
                         match toks.as_slice() {
                             [mod_name, syms @ ..] => {
-                                let mod_symbols = syms.iter().map(|s| s.to_string()).collect();
+                                let mod_symbols = syms
+                                    .iter()
+                                    .map(|s| SymbolName::SName(s.to_owned()))
+                                    .collect();
                                 symbols.insert(mod_name.to_string(), mod_symbols);
                             }
                             _ => panic!("parse_dir_lib: empty MAP entry"),
@@ -143,7 +146,7 @@ impl StaticLib {
                         Ok(o) => objects.push(o),
                     };
                     for sym in syms {
-                        symbols.insert(sym.to_string(), i);
+                        symbols.insert(SymbolName::SName(sym.to_string()), i);
                     }
                 }
                 _ => return Err(LibError::ParseLibError),

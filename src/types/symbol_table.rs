@@ -1,8 +1,47 @@
-use std::fmt;
+use std::{fmt, ops::Deref};
 
 use super::errors::ParseError;
 
-pub type SymbolName = String;
+#[derive(Eq, Ord, PartialEq, PartialOrd, Clone, Hash, Debug)]
+pub enum SymbolName {
+    SName(String),
+    WrappedSName(String),
+}
+
+impl fmt::Display for SymbolName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            SymbolName::SName(s) => write!(f, "{s}"),
+            SymbolName::WrappedSName(s) => write!(f, "wrap_{s}"),
+        }
+    }
+}
+
+impl Deref for SymbolName {
+    type Target = String;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            SymbolName::SName(s) => s,
+            SymbolName::WrappedSName(s) => s,
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! symbol {
+    ($name:expr) => {
+        SymbolName::SName(String::from($name))
+    };
+}
+
+#[macro_export]
+macro_rules! wrapped_symbol {
+    ($name:expr) => {
+        SymbolName::WrappedSName(String::from($name))
+    };
+}
+
 // Symbol table entry. Each entry is of the form:
 //   name value seg type
 // The name is the symbol name. The value is the hex value of the symbol.
@@ -58,7 +97,7 @@ pub fn parse_symbol_table_entry(nsegs: i32, s: &str) -> Result<SymbolTableEntry,
     let vs: Vec<&str> = s.split_ascii_whitespace().collect();
     match vs.as_slice() {
         [name, value, seg, ty] => {
-            st_name = String::from(*name);
+            st_name = SymbolName::SName(String::from(*name));
             match i32::from_str_radix(value, 16) {
                 Err(_) => return Err(ParseError::InvalidSTEValue),
                 Ok(i) => st_value = i,

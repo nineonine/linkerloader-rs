@@ -12,8 +12,9 @@ Module objects consist entirely of lines of ASCII text. This makes it possible t
 * Object parsers
 * Object linking
 * Object (De)Serialization
-* static libraries (both: directory and single file format)
+* Static libraries (both: directory and single file format)
 * Relocations (A4, R4, AS4, RS4, U2, L2)
+* Routine/symbol wrapping
 
 **TODO:**
 * cli interface
