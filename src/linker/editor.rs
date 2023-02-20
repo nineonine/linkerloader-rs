@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::ops::Deref;
 
-use crate::logger::*;
 use crate::types::errors::LinkError;
 use crate::types::library::StaticLib;
 use crate::types::object::ObjectIn;
@@ -10,6 +9,7 @@ use crate::types::relocation::{RelRef, RelType};
 use crate::types::segment::{Segment, SegmentName};
 use crate::types::symbol_table::{SymbolName, SymbolTableEntry};
 use crate::utils::{find_seg_start, mk_addr_4, mk_i_4, x_to_i2, x_to_i4};
+use crate::{logger::*, wrapped_symbol};
 
 type Defn = (ObjectID, usize, Option<i32>);
 type Refs = HashMap<ObjectID, usize>;
@@ -772,10 +772,20 @@ impl LinkerEditor {
         objs_in: &mut BTreeMap<ObjectID, ObjectIn>,
         routine_names: &[SymbolName],
     ) -> Result<(), LinkError> {
+        let mut already_wrapped = HashSet::new();
         for (_, obj) in objs_in.iter_mut() {
             for sym in obj.symbol_table.iter_mut() {
+                if sym.st_name.deref().starts_with("wrap_")
+                    || sym.st_name.deref().starts_with("real_")
+                {
+                    let n = sym.st_name.deref()[5..].to_owned();
+                    if already_wrapped.contains(&wrapped_symbol!(n)) {
+                        return Err(LinkError::WrappedSymbolNameAlreadyExists);
+                    }
+                }
                 if routine_names.contains(&sym.st_name) {
                     sym.st_name = SymbolName::WrappedSName(sym.st_name.deref().to_owned());
+                    already_wrapped.insert(&sym.st_name);
                 }
             }
         }

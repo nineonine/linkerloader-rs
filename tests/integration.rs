@@ -1081,3 +1081,15 @@ fn wrap_routine() {
         Err(e) => panic!("{testdir} {e:?}"),
     }
 }
+
+#[test]
+fn wrap_routine_error() {
+    let testdir = tests_base_loc("wrap_routine_error");
+    let objects = read_objects_from_dir(&testdir);
+    let mut editor = LinkerEditor::new(0x0, 0x0, 0x0, false);
+    let wrap_routines = vec![symbol!("foo")];
+    match editor.link(objects, NO_STATIC_LIBS, wrap_routines) {
+        Err(e) => assert_eq!(LinkError::WrappedSymbolNameAlreadyExists, e),
+        Ok(_) => panic!("wrap_routine_error unexpected OK"),
+    }
+}

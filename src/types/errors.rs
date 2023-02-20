@@ -45,6 +45,7 @@ pub enum LinkError {
     UndefinedSymbolError,
     AddressOverflowError,
     IntOverflowError,
+    WrappedSymbolNameAlreadyExists,
 }
 
 #[derive(Debug, PartialEq, Eq)]
