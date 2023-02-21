@@ -47,6 +47,7 @@ impl Segment {
 #[derive(Debug, Eq, PartialEq, Hash, Clone, Ord, PartialOrd)]
 pub enum SegmentName {
     TEXT,
+    GOT,
     DATA,
     BSS,
 }
@@ -55,6 +56,7 @@ impl fmt::Display for SegmentName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let segment_name_str = match self {
             SegmentName::TEXT => ".text",
+            SegmentName::GOT => ".got",
             SegmentName::DATA => ".data",
             SegmentName::BSS => ".bss",
         };
@@ -79,6 +81,10 @@ impl Deref for SegmentData {
 }
 
 impl SegmentData {
+    pub fn new(len: u8) -> Self {
+        SegmentData(vec![0, len])
+    }
+
     pub fn concat(&self, other: &SegmentData) -> SegmentData {
         let mut new_vec = self.0.clone();
         new_vec.extend_from_slice(&other.0);

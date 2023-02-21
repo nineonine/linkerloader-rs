@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::ops::Deref;
 
 use crate::types::object::MAGIC_NUMBER;
+use crate::types::relocation::Relocation;
 use crate::types::segment::*;
 
 #[derive(Debug)]
@@ -11,6 +12,7 @@ pub struct ObjectOut {
     pub nrels: i32,
     pub segments: BTreeMap<SegmentName, Segment>,
     pub object_data: BTreeMap<SegmentName, SegmentData>,
+    pub relocations: Vec<Relocation>,
 }
 
 impl Default for ObjectOut {
@@ -27,6 +29,7 @@ impl ObjectOut {
             nrels: 0,
             segments: BTreeMap::new(),
             object_data: BTreeMap::new(),
+            relocations: Vec::new(),
         }
     }
 
@@ -34,7 +37,12 @@ impl ObjectOut {
         let mut s = String::new();
         s.push_str(MAGIC_NUMBER);
         s.push_str("-OUT\n");
-        let segment_order = vec![SegmentName::TEXT, SegmentName::DATA, SegmentName::BSS];
+        let segment_order = vec![
+            SegmentName::TEXT,
+            SegmentName::GOT,
+            SegmentName::DATA,
+            SegmentName::BSS,
+        ];
         s.push_str(format!("{:X} {:X} {:X}\n", self.nsegs, self.nsyms, self.nrels).as_str());
         let mut segs = vec![];
         let mut code_and_data = vec![];

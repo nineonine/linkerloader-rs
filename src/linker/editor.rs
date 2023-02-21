@@ -6,7 +6,7 @@ use crate::types::library::StaticLib;
 use crate::types::object::ObjectIn;
 use crate::types::out::ObjectOut;
 use crate::types::relocation::{RelRef, RelType};
-use crate::types::segment::{Segment, SegmentName};
+use crate::types::segment::{Segment, SegmentData, SegmentName};
 use crate::types::symbol_table::{SymbolName, SymbolTableEntry};
 use crate::utils::{find_seg_start, mk_addr_4, mk_i_4, x_to_i2, x_to_i4};
 use crate::{logger::*, wrapped_symbol};
@@ -127,8 +127,9 @@ impl LinkerEditor {
         self.wrap_routines(&mut objs_in, &wrap_routines)?;
 
         // initial pass over input objects
+        let mut got_size = 0;
         for (obj_id, obj) in objs_in.into_iter() {
-            self.alloc_storage_and_symtables(&obj_id, &obj, &mut out, &mut info)?;
+            got_size += self.alloc_storage_and_symtables(&obj_id, &obj, &mut out, &mut info)?;
             self.session_objects.insert(obj_id, obj);
         }
 
@@ -152,11 +153,12 @@ impl LinkerEditor {
         }
 
         // update segment offsets
-        let bss_start = self.patch_segment_offsets(&mut out, &mut info);
+        let bss_start = self.patch_segment_offsets(&mut out, &mut info, got_size);
         self.logger
             .debug(format!("Object out (segment offset patching):\n{}", out.ppr()).as_str());
         self.logger
             .debug(format!("Info (segment offset patching):\n{}", info.ppr()).as_str());
+
         // Implement Unix-style common blocks. That is, scan the symbol table for undefined symbols
         // with non-zero values, and add space of appropriate size to the .bss segment.
         self.common_block_allocation(&mut out, &mut info, bss_start);
@@ -192,7 +194,7 @@ impl LinkerEditor {
         obj: &ObjectIn,
         out: &mut ObjectOut,
         info: &mut LinkerInfo,
-    ) -> Result<(), LinkError> {
+    ) -> Result<i32, LinkError> {
         self.logger.debug(&format!(
             " ==> Linking in {}\n{}",
             obj_id,
@@ -256,7 +258,15 @@ impl LinkerEditor {
                     .or_insert(ste.st_value);
             }
         }
-        Ok(())
+
+        let mut got_size = 0;
+        for r in obj.relocations.iter() {
+            if r.rel_type == RelType::GP4 {
+                got_size += 4;
+            }
+        }
+
+        Ok(got_size)
     }
 
     fn build_symbol_tables(
@@ -305,12 +315,22 @@ impl LinkerEditor {
         None
     }
 
-    // update TEXT start and patch segment addrs in link info
-    // then do the same patching in DATA segment - update start and adjust address in info
-    // then BSS. We might reuse the returned value (BSS_START) in case we need to allocate
-    // later common block
-    fn patch_segment_offsets(&mut self, out: &mut ObjectOut, info: &mut LinkerInfo) -> i32 {
+    // Update TEXT start and patch segment addrs in link info
+    // If we are building PiC - factor in and allocate global offset table.
+    // Then do the same patching in DATA segment - update start and adjust address in info.
+    // Then BSS. We might reuse the returned value (BSS_START) in case we need to allocate
+    // common block later.
+    fn patch_segment_offsets(
+        &mut self,
+        out: &mut ObjectOut,
+        info: &mut LinkerInfo,
+        got_size: i32,
+    ) -> i32 {
         self.patch_text_seg(out, info);
+        if got_size != 0 {
+            self.logger.debug("GOT segment will be allocated");
+            self.alloc_got(out, got_size);
+        }
         self.patch_data_seg(out, info);
         self.patch_bss_seg(out, info)
     }
@@ -326,10 +346,25 @@ impl LinkerEditor {
         }
     }
 
-    fn patch_data_seg(&mut self, out: &mut ObjectOut, info: &mut LinkerInfo) {
+    fn alloc_got(&self, out: &mut ObjectOut, got_size: i32) {
+        let mut got_segment = Segment::new(SegmentName::GOT);
         let text_end = out.segments.get(&SegmentName::TEXT).unwrap().segment_start
             + out.segments.get(&SegmentName::TEXT).unwrap().segment_len;
-        let data_start = find_seg_start(text_end, self.data_start_boundary);
+        got_segment.segment_start = text_end;
+        got_segment.segment_len = got_size;
+        out.segments.insert(SegmentName::GOT, got_segment);
+        out.object_data
+            .insert(SegmentName::GOT, SegmentData::new(got_size as u8));
+    }
+
+    fn patch_data_seg(&mut self, out: &mut ObjectOut, info: &mut LinkerInfo) {
+        let last_seg_name = match out.segments.get(&SegmentName::GOT) {
+            Some(_) => SegmentName::GOT,
+            None => SegmentName::TEXT,
+        };
+        let last_seg_end = out.segments.get(&last_seg_name).unwrap().segment_start
+            + out.segments.get(&last_seg_name).unwrap().segment_len;
+        let data_start = find_seg_start(last_seg_end, self.data_start_boundary);
         out.segments
             .entry(SegmentName::DATA)
             .and_modify(|s| s.segment_start = data_start);
@@ -509,6 +544,7 @@ impl LinkerEditor {
                     RelRef::SymbolRef(sym_i) => {
                         format!("symbol '{}'", mod_obj.symbol_table[sym_i].st_name)
                     }
+                    RelRef::NoRef => String::new(),
                 };
                 self.logger.debug(&format!(
                     "Relocation {} of {reloc_entity} reference at offset 0x{:X} (segment {})",
@@ -518,6 +554,7 @@ impl LinkerEditor {
                     RelType::A4 => {
                         match r.rel_ref {
                             RelRef::SymbolRef(_) => panic!("run_relocations: A4 with SymbolRef"),
+                            RelRef::NoRef => panic!("run_relocations: A4 with NoRef"),
                             RelRef::SegmentRef(seg_i) => {
                                 // what segment are we relocating? note that we are relocating reference
                                 // to the segment of module the contains that relocation entry
@@ -555,6 +592,7 @@ impl LinkerEditor {
                     RelType::R4 => {
                         match r.rel_ref {
                             RelRef::SymbolRef(_) => panic!("run_relocations: R4 with SymbolRef"),
+                            RelRef::NoRef => panic!("run_relocations: R4 with NoRef"),
                             RelRef::SegmentRef(seg_i) => {
                                 let seg_name = mod_obj.segments[seg_i].segment_name.clone();
                                 let mod_seg_off = *info
@@ -592,6 +630,7 @@ impl LinkerEditor {
                     RelType::AS4 => {
                         match r.rel_ref {
                             RelRef::SegmentRef(_) => panic!("run_relocations: AS4 with SegmentRef"),
+                            RelRef::NoRef => panic!("run_relocations: AS4 with NoRef"),
                             RelRef::SymbolRef(sym_i) => {
                                 // what symbol are we relocating? note that we are relocating reference
                                 // to the segment of module the contains that relocation entry
@@ -640,6 +679,7 @@ impl LinkerEditor {
                     }
                     RelType::RS4 => match r.rel_ref {
                         RelRef::SegmentRef(_) => panic!("run_relocations: RS4 with SegmentRef"),
+                        RelRef::NoRef => panic!("run_relocations: RS4 with NoRef"),
                         RelRef::SymbolRef(sym_i) => {
                             let sym_name = &mod_obj.symbol_table[sym_i].st_name;
                             // absolute symbol ref target address
@@ -682,6 +722,7 @@ impl LinkerEditor {
                     RelType::U2 => {
                         match r.rel_ref {
                             RelRef::SegmentRef(_) => panic!("run_relocations: U2 with SegmentRef"),
+                            RelRef::NoRef => panic!("run_relocations: U2 with NoRef"),
                             RelRef::SymbolRef(sym_i) => {
                                 // what symbol are we relocating? note that we are relocating reference
                                 // to the segment of module the contains that relocation entry
@@ -723,6 +764,7 @@ impl LinkerEditor {
                     RelType::L2 => {
                         match r.rel_ref {
                             RelRef::SegmentRef(_) => panic!("run_relocations: L2 with SegmentRef"),
+                            RelRef::NoRef => panic!("run_relocations: L2 with NoRef"),
                             RelRef::SymbolRef(sym_i) => {
                                 // what symbol are we relocating? note that we are relocating reference
                                 // to the segment of module the contains that relocation entry
@@ -761,6 +803,10 @@ impl LinkerEditor {
                             }
                         }
                     }
+                    RelType::GA4 => {}
+                    RelType::GP4 => {}
+                    RelType::GR4 => {}
+                    RelType::ER4 => {}
                 }
             }
         }

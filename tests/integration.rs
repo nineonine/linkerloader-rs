@@ -1093,3 +1093,17 @@ fn wrap_routine_error() {
         Ok(_) => panic!("wrap_routine_error unexpected OK"),
     }
 }
+
+#[test]
+fn position_independent_code() {
+    let testdir = tests_base_loc("position_independent_code");
+    let objects = read_objects_from_dir(&testdir);
+    let mut editor = LinkerEditor::new(0x0, 0x0, 0x0, false);
+    match editor.link(objects, NO_STATIC_LIBS, NO_WRAP_ROUTINES) {
+        Ok((out, info)) => {
+            println!("{out:?}");
+            println!("{info:?}");
+        }
+        Err(e) => panic!("{testdir} {e:?}"),
+    }
+}
