@@ -1113,6 +1113,19 @@ fn position_independent_code() {
                 0x1C,
                 x_to_i4(obj_code_text.get_at(0xC, 0x4).unwrap()).unwrap()
             );
+            let obj_code_got = out.object_data.get(&SegmentName::GOT).unwrap();
+            assert_eq!(
+                0x3E,
+                x_to_i4(obj_code_got.get_at(0x0, 0x4).unwrap()).unwrap()
+            );
+            assert_eq!(
+                0x0,
+                x_to_i4(obj_code_text.get_at(0x10, 0x4).unwrap()).unwrap()
+            );
+            assert_eq!(
+                0x4,
+                x_to_i4(obj_code_text.get_at(0x14, 0x4).unwrap()).unwrap()
+            );
         }
         Err(e) => panic!("{testdir} {e:?}"),
     }

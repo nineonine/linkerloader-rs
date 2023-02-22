@@ -530,6 +530,7 @@ impl LinkerEditor {
     }
 
     fn run_relocations(&mut self, out: &mut ObjectOut, info: &LinkerInfo) -> Result<(), LinkError> {
+        let mut got_offset = 0;
         for (modname, mod_obj) in self.session_objects.iter() {
             if !mod_obj.relocations.is_empty() {
                 self.logger
@@ -833,7 +834,60 @@ impl LinkerEditor {
                             }
                         }
                     }
-                    RelType::GP4 => {}
+                    RelType::GP4 => {
+                        match r.rel_ref {
+                            RelRef::SegmentRef(_) => panic!("run_relocations: GP4 with SegmentRef"),
+                            RelRef::NoRef => panic!("run_relocations: GP4 with NoRef"),
+                            RelRef::SymbolRef(sym_i) => {
+                                let sz = 4;
+                                let sym_name = &mod_obj.symbol_table[sym_i].st_name;
+                                let mod_sym_off = info
+                                    .global_symtable
+                                    .get(sym_name)
+                                    .unwrap()
+                                    .0
+                                    .as_ref()
+                                    .unwrap()
+                                    .2
+                                    .unwrap();
+                                match mk_addr_4((mod_sym_off) as usize) {
+                                    None => return Err(LinkError::AddressOverflowError),
+                                    Some(v) => {
+                                        // fix up the code!
+                                        out.object_data.entry(SegmentName::GOT).and_modify(|sd| {
+                                            self.logger.debug(&format!(
+                                                "  Setting 0x{mod_sym_off:08X} in GOT at offset {got_offset}"
+                                            ));
+                                            sd.update(got_offset, sz, v);
+                                        });
+                                    }
+                                }
+                                let loc_off = *info
+                                    .segment_mapping
+                                    .get(modname)
+                                    .unwrap()
+                                    .get(&r.rel_seg)
+                                    .unwrap()
+                                    + r.rel_loc
+                                    - out.segments.get(&r.rel_seg).unwrap().segment_start;
+                                match mk_addr_4(got_offset) {
+                                    None => return Err(LinkError::AddressOverflowError),
+                                    Some(v) => {
+                                        // fix up the code!
+                                        out.object_data.entry(r.rel_seg.clone()).and_modify(|sd| {
+                                            self.logger.debug(&format!(
+                                                "  Setting GOT offset 0x{got_offset:08X} in {}",
+                                                r.rel_seg
+                                            ));
+                                            let sz = 4;
+                                            sd.update(loc_off as usize, sz, v);
+                                        });
+                                    }
+                                }
+                                got_offset += sz;
+                            }
+                        }
+                    }
                     RelType::GR4 => {}
                     RelType::ER4 => {}
                 }
