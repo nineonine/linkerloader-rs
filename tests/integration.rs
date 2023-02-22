@@ -1103,6 +1103,16 @@ fn position_independent_code() {
         Ok((out, info)) => {
             println!("{out:?}");
             println!("{info:?}");
+            let obj_code_text = out.object_data.get(&SegmentName::TEXT).unwrap();
+            assert_eq!(
+                0x24,
+                x_to_i4(obj_code_text.get_at(0x8, 0x4).unwrap()).unwrap()
+            );
+            assert_eq!(8, out.object_data.get(&SegmentName::GOT).unwrap().len());
+            assert_eq!(
+                0x1C,
+                x_to_i4(obj_code_text.get_at(0xC, 0x4).unwrap()).unwrap()
+            );
         }
         Err(e) => panic!("{testdir} {e:?}"),
     }

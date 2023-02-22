@@ -354,7 +354,7 @@ impl LinkerEditor {
         got_segment.segment_len = got_size;
         out.segments.insert(SegmentName::GOT, got_segment);
         out.object_data
-            .insert(SegmentName::GOT, SegmentData::new(got_size as u8));
+            .insert(SegmentName::GOT, SegmentData::new(got_size as usize));
     }
 
     fn patch_data_seg(&mut self, out: &mut ObjectOut, info: &mut LinkerInfo) {
@@ -539,15 +539,15 @@ impl LinkerEditor {
             for r in mod_obj.relocations.iter() {
                 let reloc_entity = match r.rel_ref {
                     RelRef::SegmentRef(seg_i) => {
-                        format!("segment {}", mod_obj.segments[seg_i].segment_name)
+                        format!("segment {} reference", mod_obj.segments[seg_i].segment_name)
                     }
                     RelRef::SymbolRef(sym_i) => {
-                        format!("symbol '{}'", mod_obj.symbol_table[sym_i].st_name)
+                        format!("symbol '{}' reference", mod_obj.symbol_table[sym_i].st_name)
                     }
                     RelRef::NoRef => String::new(),
                 };
                 self.logger.debug(&format!(
-                    "Relocation {} of {reloc_entity} reference at offset 0x{:X} (segment {})",
+                    "Relocation {} of {reloc_entity} at offset 0x{:X} (segment {})",
                     r.rel_type, r.rel_loc, r.rel_seg
                 ));
                 match r.rel_type {
@@ -803,7 +803,36 @@ impl LinkerEditor {
                             }
                         }
                     }
-                    RelType::GA4 => {}
+                    RelType::GA4 => {
+                        match r.rel_ref {
+                            RelRef::SegmentRef(_) => panic!("run_relocations: GA4 with SegmentRef"),
+                            RelRef::SymbolRef(_) => panic!("run_relocations: GA4 with SymbolRef"),
+                            RelRef::NoRef => {
+                                let seg_addr = *info
+                                    .segment_mapping
+                                    .get(modname)
+                                    .unwrap()
+                                    .get(&r.rel_seg)
+                                    .unwrap();
+                                let loc_off = seg_addr + r.rel_loc
+                                    - out.segments.get(&r.rel_seg).unwrap().segment_start;
+                                let got_offs =
+                                    out.segments.get(&SegmentName::GOT).unwrap().segment_start;
+                                let dist_to_got = got_offs - (seg_addr + r.rel_loc);
+                                match mk_addr_4(dist_to_got as usize) {
+                                    None => return Err(LinkError::AddressOverflowError),
+                                    Some(v) => {
+                                        // fix up the code!
+                                        out.object_data.entry(r.rel_seg.clone()).and_modify(|sd| {
+                                            self.logger
+                                                .debug(&format!("  Setting 0x{dist_to_got:08X}",));
+                                            sd.update(loc_off as usize, 4, v[0..4].to_vec());
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
                     RelType::GP4 => {}
                     RelType::GR4 => {}
                     RelType::ER4 => {}

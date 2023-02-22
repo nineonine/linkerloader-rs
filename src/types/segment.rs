@@ -81,8 +81,8 @@ impl Deref for SegmentData {
 }
 
 impl SegmentData {
-    pub fn new(len: u8) -> Self {
-        SegmentData(vec![0, len])
+    pub fn new(len: usize) -> Self {
+        SegmentData(vec![0; len])
     }
 
     pub fn concat(&self, other: &SegmentData) -> SegmentData {

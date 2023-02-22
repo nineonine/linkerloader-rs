@@ -3,9 +3,9 @@ LINK
 .text 0 C RP
 .data C 8 PWR
 .bss 14 4 RW
-free 0 1 D
-foo 0 2 D
-bar 4 2 D
+bar 0 2 D
+foo 4 2 D
+free 8 1 D
 00 00 00 00 00 00 00 00 00 00 00 00
 00 00 00 00 00 00 00 00
 00 00 00 00
