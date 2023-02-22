@@ -817,9 +817,9 @@ impl LinkerEditor {
                                     .unwrap();
                                 let loc_off = seg_addr + r.rel_loc
                                     - out.segments.get(&r.rel_seg).unwrap().segment_start;
-                                let got_offs =
+                                let got_off =
                                     out.segments.get(&SegmentName::GOT).unwrap().segment_start;
-                                let dist_to_got = got_offs - (seg_addr + r.rel_loc);
+                                let dist_to_got = got_off - (seg_addr + r.rel_loc);
                                 match mk_addr_4(dist_to_got as usize) {
                                     None => return Err(LinkError::AddressOverflowError),
                                     Some(v) => {
@@ -879,7 +879,6 @@ impl LinkerEditor {
                                                 "  Setting GOT offset 0x{got_offset:08X} in {}",
                                                 r.rel_seg
                                             ));
-                                            let sz = 4;
                                             sd.update(loc_off as usize, sz, v);
                                         });
                                     }
@@ -888,7 +887,48 @@ impl LinkerEditor {
                             }
                         }
                     }
-                    RelType::GR4 => {}
+                    RelType::GR4 => {
+                        match r.rel_ref {
+                            RelRef::SymbolRef(_) => panic!("run_relocations: GR4 with SymbolRef"),
+                            RelRef::NoRef => panic!("run_relocations: GR4 with NoRef"),
+                            RelRef::SegmentRef(seg_i) => {
+                                let loc_off = *info
+                                    .segment_mapping
+                                    .get(modname)
+                                    .unwrap()
+                                    .get(&r.rel_seg)
+                                    .unwrap()
+                                    + r.rel_loc
+                                    - out.segments.get(&r.rel_seg).unwrap().segment_start;
+                                let addr_off = x_to_i4(
+                                    out.object_data
+                                        .get(&r.rel_seg)
+                                        .unwrap()
+                                        .get_at(loc_off as usize, 0x4)
+                                        .unwrap(),
+                                )
+                                .unwrap();
+                                let seg_name = mod_obj.segments[seg_i].segment_name.clone();
+                                let seg_ref_addr = *info
+                                    .segment_mapping
+                                    .get(modname)
+                                    .unwrap()
+                                    .get(&seg_name)
+                                    .unwrap();
+                                let got_off =
+                                    out.segments.get(&SegmentName::GOT).unwrap().segment_start;
+                                // fix up the code!
+                                out.object_data.entry(r.rel_seg.clone()).and_modify(|sd| {
+                                    let rel_addr_val = mk_i_4(seg_ref_addr + addr_off - got_off);
+                                    self.logger.debug(&format!(
+                                        "  Setting 0x{:08X}",
+                                        seg_ref_addr + addr_off - got_off
+                                    ));
+                                    sd.update(loc_off as usize, 4, rel_addr_val);
+                                });
+                            }
+                        }
+                    }
                     RelType::ER4 => {}
                 }
             }
