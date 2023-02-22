@@ -1130,6 +1130,7 @@ fn position_independent_code() {
                 0xC,
                 x_to_i4(obj_code_text.get_at(0x18, 0x4).unwrap()).unwrap()
             );
+            assert_eq!(2, out.relocations.len());
         }
         Err(e) => panic!("{testdir} {e:?}"),
     }

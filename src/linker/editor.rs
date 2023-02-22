@@ -5,7 +5,7 @@ use crate::types::errors::LinkError;
 use crate::types::library::StaticLib;
 use crate::types::object::ObjectIn;
 use crate::types::out::ObjectOut;
-use crate::types::relocation::{RelRef, RelType};
+use crate::types::relocation::{RelRef, RelType, Relocation};
 use crate::types::segment::{Segment, SegmentData, SegmentName};
 use crate::types::symbol_table::{SymbolName, SymbolTableEntry};
 use crate::utils::{find_seg_start, mk_addr_4, mk_i_4, x_to_i2, x_to_i4};
@@ -67,7 +67,7 @@ pub enum Endianness {
 }
 
 pub struct LinkerEditor {
-    text_start: i32,
+    text_start: i32, // exe/lib start
     data_start_boundary: i32,
     bss_start_boundary: i32,
     pub session_objects: BTreeMap<ObjectID, ObjectIn>,
@@ -587,6 +587,24 @@ impl LinkerEditor {
                                         })
                                     }
                                 };
+                                // create PiC relocations
+                                let er_rel_loc = *info
+                                    .segment_mapping
+                                    .get(modname)
+                                    .unwrap()
+                                    .get(&r.rel_seg)
+                                    .unwrap()
+                                    + r.rel_loc
+                                    - out.segments.get(&r.rel_seg).unwrap().segment_start;
+                                self.logger.debug(&format!(
+                                    "  Creating ER4 relocation at 0x{er_rel_loc:08X}"
+                                ));
+                                out.relocations.push(Relocation {
+                                    rel_loc: er_rel_loc,
+                                    rel_seg: r.rel_seg.clone(),
+                                    rel_ref: RelRef::NoRef,
+                                    rel_type: RelType::ER4,
+                                });
                             }
                         };
                     }
@@ -675,6 +693,24 @@ impl LinkerEditor {
                                         });
                                     }
                                 }
+                                // create PiC relocations
+                                let er_rel_loc = *info
+                                    .segment_mapping
+                                    .get(modname)
+                                    .unwrap()
+                                    .get(&r.rel_seg)
+                                    .unwrap()
+                                    + r.rel_loc
+                                    - out.segments.get(&r.rel_seg).unwrap().segment_start;
+                                self.logger.debug(&format!(
+                                    "  Creating ER4 relocation at 0x{er_rel_loc:08X}"
+                                ));
+                                out.relocations.push(Relocation {
+                                    rel_loc: er_rel_loc,
+                                    rel_seg: r.rel_seg.clone(),
+                                    rel_ref: RelRef::NoRef,
+                                    rel_type: RelType::ER4,
+                                });
                             }
                         }
                     }
@@ -929,7 +965,43 @@ impl LinkerEditor {
                             }
                         }
                     }
-                    RelType::ER4 => {}
+                    RelType::ER4 => {
+                        match r.rel_ref {
+                            RelRef::SymbolRef(_) => panic!("run_relocations: ER4 with SymbolRef"),
+                            RelRef::SegmentRef(_) => panic!("run_relocations: ER4 with SegmentRef"),
+                            RelRef::NoRef => {
+                                let loc_off = *info
+                                    .segment_mapping
+                                    .get(modname)
+                                    .unwrap()
+                                    .get(&r.rel_seg)
+                                    .unwrap()
+                                    + r.rel_loc
+                                    - out.segments.get(&r.rel_seg).unwrap().segment_start;
+                                let addr = x_to_i4(
+                                    out.object_data
+                                        .get(&r.rel_seg)
+                                        .unwrap()
+                                        .get_at(loc_off as usize, 0x4)
+                                        .unwrap(),
+                                )
+                                .unwrap();
+                                match mk_addr_4((addr + self.text_start) as usize) {
+                                    None => return Err(LinkError::AddressOverflowError),
+                                    Some(v) => {
+                                        // fix up the code!
+                                        out.object_data.entry(r.rel_seg.clone()).and_modify(|sd| {
+                                            self.logger.debug(&format!(
+                                                "  Setting 0x{:08X}",
+                                                addr + self.text_start
+                                            ));
+                                            sd.update(loc_off as usize, 4, v);
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
