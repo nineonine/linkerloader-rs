@@ -16,6 +16,7 @@ Module objects consist entirely of lines of ASCII text. This makes it possible t
 * Relocations (A4, R4, AS4, RS4, U2, L2)
 * Routine/symbol wrapping
 * Position-independent code (GA4, GP4, GR4, ER4)
+* Statically linked shared libraries
 
 **TODO:**
 * cli interface
