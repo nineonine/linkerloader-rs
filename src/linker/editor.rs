@@ -45,11 +45,10 @@ impl LinkerInfo {
         let mut s = String::new();
         s.push_str("Link Info:\n");
         let mut es = vec![];
-        let segment_order = vec![SegmentName::TEXT, SegmentName::DATA, SegmentName::BSS];
         for (obj_id, seg_addrs) in self.segment_mapping.iter() {
             let mut entry = String::new();
             entry.push_str(format!("  {} =>", &obj_id).as_str());
-            for s_n in segment_order.iter() {
+            for s_n in SegmentName::order().iter() {
                 if let Some(addr) = seg_addrs.get(s_n) {
                     entry.push_str(format!(" {s_n}: {addr:X}").as_str());
                 }
@@ -75,7 +74,7 @@ pub struct LinkerEditor {
     _endianness: Endianness,
 }
 
-type ObjectID = String;
+pub type ObjectID = String;
 
 impl LinkerEditor {
     fn print_linker_editor_cfg(&mut self) {

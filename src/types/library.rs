@@ -4,20 +4,20 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 
+use crate::linker::editor::{LinkerEditor, ObjectID};
 use crate::types::errors::LibError;
 use crate::types::object::{parse_object_file, ObjectIn, MAGIC_NUMBER};
 use crate::types::symbol_table::SymbolName;
 use crate::utils::{count_new_lines, read_object_file};
 
-type LibObjName = String;
 type ModOffset = usize;
 
 #[derive(Debug)]
 pub enum StaticLib {
     DirLib {
         libname: String,
-        symbols: BTreeMap<LibObjName, BTreeSet<SymbolName>>,
-        objects: HashMap<LibObjName, ObjectIn>,
+        symbols: BTreeMap<ObjectID, BTreeSet<SymbolName>>,
+        objects: HashMap<ObjectID, ObjectIn>,
     },
     FileLib {
         libname: String,
@@ -31,14 +31,28 @@ enum LibFormat {
     FileFormat,
 }
 
-const MAP_FILE_NAME: &str = "MAP";
-const MAGIC_NUMBER_LIB: &str = "LIBRARY";
+pub const MAP_FILE_NAME: &str = "MAP";
+pub const MAGIC_NUMBER_LIB: &str = "LIBRARY";
 
 impl StaticLib {
     pub fn parse(path: &str) -> Result<StaticLib, LibError> {
         match StaticLib::infer_lib_format(path) {
             LibFormat::DirFormat => StaticLib::parse_dir_lib(path),
             LibFormat::FileFormat => StaticLib::parse_file_lib(path),
+        }
+    }
+
+    fn get_objects(&self) -> HashMap<ObjectID, ObjectIn> {
+        match self {
+            StaticLib::DirLib { objects, .. } => objects.clone(),
+            _ => panic!("get_objects: not implemented"),
+        }
+    }
+
+    pub fn get_name(&self) -> &String {
+        match self {
+            StaticLib::DirLib { libname, .. } => libname,
+            StaticLib::FileLib { libname, .. } => libname,
         }
     }
 
@@ -288,4 +302,15 @@ impl StaticLib {
         map_file.write_all(StaticLib::make_staticlib_file(objects).as_bytes())?;
         Ok(name.to_str().unwrap().to_owned())
     }
+
+    pub fn build_shared_lib(&self, start: i32) -> Result<(), LibError> {
+        let mut editor: LinkerEditor = LinkerEditor::new(start, 0x0, 0x0, false);
+        let _obj_out = editor.link(self.get_objects().into_iter().collect(), vec![], vec![]);
+
+        Ok(())
+    }
+}
+pub struct StaticSharedLib {
+    // pub linked_exe: ObjectOut,
+    // pub stub: StubLib,
 }

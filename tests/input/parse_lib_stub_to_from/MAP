@@ -1,0 +1,3 @@
+MAP
+libmod_1_stub foo bar
+libmod_2_stub free malloc printf

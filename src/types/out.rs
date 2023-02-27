@@ -5,12 +5,17 @@ use crate::types::object::MAGIC_NUMBER;
 use crate::types::relocation::Relocation;
 use crate::types::segment::*;
 
+use super::symbol_table::SymbolName;
+
+pub type Address = i32;
+
 #[derive(Debug)]
 pub struct ObjectOut {
     pub nsegs: i32,
     pub nsyms: i32,
     pub nrels: i32,
     pub segments: BTreeMap<SegmentName, Segment>,
+    pub symtable: BTreeMap<SymbolName, Address>,
     pub object_data: BTreeMap<SegmentName, SegmentData>,
     pub relocations: Vec<Relocation>,
 }
@@ -28,6 +33,7 @@ impl ObjectOut {
             nsyms: 0,
             nrels: 0,
             segments: BTreeMap::new(),
+            symtable: BTreeMap::new(),
             object_data: BTreeMap::new(),
             relocations: Vec::new(),
         }
@@ -37,16 +43,10 @@ impl ObjectOut {
         let mut s = String::new();
         s.push_str(MAGIC_NUMBER);
         s.push_str("-OUT\n");
-        let segment_order = vec![
-            SegmentName::TEXT,
-            SegmentName::GOT,
-            SegmentName::DATA,
-            SegmentName::BSS,
-        ];
         s.push_str(format!("{:X} {:X} {:X}\n", self.nsegs, self.nsyms, self.nrels).as_str());
         let mut segs = vec![];
         let mut code_and_data = vec![];
-        for segment_name in segment_order.iter() {
+        for segment_name in SegmentName::order().iter() {
             if let Some(seg) = self.segments.get(segment_name) {
                 let descrs = seg.ppr_seg_descr();
                 segs.push(format!(

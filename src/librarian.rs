@@ -57,4 +57,12 @@ impl Librarian {
         }
         Ok(())
     }
+
+    pub fn build_static_shared_lib(&mut self, path: &str, start: i32) -> Result<(), LibError> {
+        self.logger.do_log(
+            LogLevel::Info,
+            &format!("Building statically linked shared library at {path:?}"),
+        );
+        StaticLib::parse(path)?.build_shared_lib(start)
+    }
 }

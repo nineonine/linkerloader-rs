@@ -10,6 +10,7 @@ use linkerloader::types::library::StaticLib;
 use linkerloader::types::object::MAGIC_NUMBER;
 use linkerloader::types::relocation::{RelRef, RelType, Relocation};
 use linkerloader::types::segment::{SegmentDescr, SegmentName};
+use linkerloader::types::stub::StubLib;
 use linkerloader::types::symbol_table::{SymbolName, SymbolTableEntry, SymbolTableEntryType};
 use linkerloader::utils::{read_object_file, x_to_i2, x_to_i4};
 use linkerloader::{symbol, wrapped_symbol};
@@ -37,6 +38,12 @@ fn ensure_clean_state_extra(path: &str, other_things_to_clean: Vec<&str>) {
         if static_lib.exists() {
             println!("removing static lib file");
             fs::remove_file(static_lib).unwrap();
+        }
+        // delete stub lib file if exists
+        let stub_lib = p.join(PathBuf::from("stublib"));
+        if stub_lib.exists() {
+            println!("removing stub lib dir");
+            fs::remove_dir_all(stub_lib).unwrap();
         }
     }
     for s in other_things_to_clean.into_iter() {
@@ -1134,4 +1141,78 @@ fn position_independent_code() {
         }
         Err(e) => panic!("{testdir} {e:?}"),
     }
+}
+
+#[test]
+fn parse_lib_stub() {
+    let testdir = tests_base_loc("parse_lib_stub");
+    match StubLib::parse(&testdir) {
+        Ok(stub_lib) => {
+            println!("{stub_lib:?}");
+            assert_eq!(2, stub_lib.members.len());
+            assert_eq!(2, stub_lib.members.len());
+            assert_eq!(2, stub_lib.members.get("libmod_1_stub").unwrap().syms.len());
+            assert_eq!(3, stub_lib.members.get("libmod_2_stub").unwrap().syms.len());
+            assert_eq!(
+                0x100,
+                stub_lib
+                    .members
+                    .get("libmod_2_stub")
+                    .unwrap()
+                    .syms
+                    .get(&symbol!("printf"))
+                    .unwrap()
+                    .to_owned()
+                    .unwrap_left()
+            );
+        }
+        Err(e) => panic!("{testdir} {e:?}"),
+    }
+}
+
+#[test]
+fn parse_lib_stub_to_from() {
+    let testdir = tests_base_loc("parse_lib_stub_to_from");
+    ensure_clean_state(&testdir);
+    match StubLib::parse(&testdir) {
+        Ok(stub_lib0) => {
+            println!("{stub_lib0:?}");
+            match stub_lib0.write_to_disk(Some(&testdir), Some("stublib")) {
+                Err(e) => panic!("{testdir} {e:?}"),
+                Ok(_) => match StubLib::parse(&format!("{testdir}/stublib")) {
+                    Err(e) => panic!("{testdir} {e:?}"),
+                    Ok(stub_lib1) => {
+                        println!("{stub_lib1:?}");
+                        assert_eq!(stub_lib0.libname, stub_lib1.libname);
+                        assert_eq!(stub_lib0.deps.len(), stub_lib1.deps.len());
+                        assert_eq!(stub_lib0.deps[0], stub_lib1.deps[0]);
+                        assert_eq!(stub_lib0.defs.len(), stub_lib1.defs.len());
+                        assert_eq!(stub_lib0.members.len(), stub_lib1.members.len());
+                        assert_eq!(
+                            stub_lib0
+                                .members
+                                .get("libmod_2_stub")
+                                .unwrap()
+                                .syms
+                                .get(&symbol!("printf"))
+                                .unwrap()
+                                .to_owned()
+                                .unwrap_left(),
+                            stub_lib1
+                                .members
+                                .get("libmod_2_stub")
+                                .unwrap()
+                                .syms
+                                .get(&symbol!("printf"))
+                                .unwrap()
+                                .to_owned()
+                                .unwrap_left()
+                        )
+                    }
+                },
+            }
+        }
+        Err(e) => panic!("{testdir} {e:?}"),
+    }
+    // ensure_clean_state(&testdir);
 }

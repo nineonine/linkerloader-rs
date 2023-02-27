@@ -1,0 +1,4 @@
+STUB
+free 70
+malloc 80
+printf 100

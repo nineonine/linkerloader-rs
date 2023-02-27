@@ -1,0 +1,5 @@
+STUB
+free 70
+malloc 80
+printf 100
+some_undef_2 some_other_lib

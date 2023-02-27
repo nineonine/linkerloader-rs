@@ -50,6 +50,19 @@ pub enum SegmentName {
     GOT,
     DATA,
     BSS,
+    LIB,
+}
+
+impl SegmentName {
+    pub fn order() -> Vec<SegmentName> {
+        vec![
+            SegmentName::TEXT,
+            SegmentName::DATA,
+            SegmentName::BSS,
+            SegmentName::GOT,
+            SegmentName::LIB,
+        ]
+    }
 }
 
 impl fmt::Display for SegmentName {
@@ -59,6 +72,7 @@ impl fmt::Display for SegmentName {
             SegmentName::GOT => ".got",
             SegmentName::DATA => ".data",
             SegmentName::BSS => ".bss",
+            SegmentName::LIB => ".lib",
         };
         write!(f, "{segment_name_str}")
     }
@@ -134,6 +148,8 @@ pub fn parse_segment(s: &str) -> Result<Segment, ParseError> {
                 ".text" => segment_name = SegmentName::TEXT,
                 ".data" => segment_name = SegmentName::DATA,
                 ".bss" => segment_name = SegmentName::BSS,
+                ".got" => segment_name = SegmentName::GOT,
+                ".lib" => segment_name = SegmentName::LIB,
                 _ => return Err(ParseError::InvalidSegmentName),
             }
             match i32::from_str_radix(start, 16) {
