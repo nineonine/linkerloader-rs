@@ -1,0 +1,10 @@
+LINK
+2 3 1
+.text 0 10 PWR
+.data B 8 PWR
+malloc 0 0 U
+printf C 1 D
+errno 4 2 D
+0 1 1 AS4
+00 00 00 00 00 00 00 00 00 00 00 00 FA CA DE 01
+00 00 00 00 FA CE FE ED

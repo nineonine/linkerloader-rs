@@ -1,0 +1,11 @@
+LINK
+2 3 2
+.text 0
+.data F
+babababa 0 1 D
+atof 0 0 U
+libdata 0 0 U
+4 1 2 AS4
+0 2 3 AS4
+BA BA BA BA 00 00 00 00
+00 00 00 00

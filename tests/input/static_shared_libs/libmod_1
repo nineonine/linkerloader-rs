@@ -1,0 +1,5 @@
+LINK
+1 1 0
+.text 0 10 PWR
+libfoo C 1 D
+00 00 00 00 00 00 00 00 00 00 00 00 BA DC 0F FE

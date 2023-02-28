@@ -1,0 +1,20 @@
+LINK
+3 7 5
+.text 0 10 PWR
+.data 12 C PWR
+.bss 1C 4
+fun 0 1 D
+datavar 0 2 D
+libfoo 0 0 U
+printf 0 0 U
+errno 0 0 U
+malloc 0 0 U
+libdata 0 0 U
+4 1 3 AS4
+8 1 4 AS4
+4 2 5 AS4
+C 1 6 AS4
+8 2 7 AS4
+BA AB BA AB 00 00 00 00 00 00 00 00 00 00 00 00
+90 CC CC 09 00 00 00 00 00 00 00 00
+00 00 00 00

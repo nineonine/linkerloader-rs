@@ -50,9 +50,11 @@ fn ensure_clean_state_extra(path: &str, other_things_to_clean: Vec<&str>) {
         let p1 = &p.join(PathBuf::from(s));
         if p1.exists() {
             if p1.is_dir() {
+                println!("removing dir {p1:?}");
                 let _ = fs::remove_dir_all(p1);
             }
             if p1.is_file() {
+                println!("removing file {p1:?}");
                 let _ = fs::remove_file(p1);
             }
         }
@@ -1215,4 +1217,23 @@ fn parse_lib_stub_to_from() {
         Err(e) => panic!("{testdir} {e:?}"),
     }
     // ensure_clean_state(&testdir);
+}
+
+#[test]
+fn static_shared_libs() {
+    let testdir = tests_base_loc("static_shared_libs");
+    ensure_clean_state_extra(&testdir, vec!["staticlib1", "staticlib2", "staticlib3"]);
+    let mut librarian = Librarian::new(false);
+    // build static dir lib 1
+    let lib1_objs = vec!["another_shared_lib"];
+    let _ = librarian.build_libdir(Some(&testdir), Some("staticlib1"), lib1_objs);
+    // now build another one (that depends on previous)
+    let lib2_objs = vec!["sharedlibmod_1", "sharedlibmod_2"];
+    let _ = librarian.build_libdir(Some(&testdir), Some("staticlib2"), lib2_objs);
+    // build 3rd static library that won't be built as shared
+    let lib3_objs = vec!["libmod_1"];
+    let _ = librarian.build_libdir(Some(&testdir), Some("staticlib3"), lib3_objs);
+    // build shared lib (linked obj and stubs)
+    // build project with shared libs
+    ensure_clean_state_extra(&testdir, vec!["staticlib1", "staticlib2", "staticlib3"]);
 }
