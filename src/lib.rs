@@ -1,3 +1,4 @@
+pub mod common;
 pub mod gen;
 pub mod librarian;
 pub mod linker;

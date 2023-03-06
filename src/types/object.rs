@@ -7,8 +7,7 @@ use crate::types::errors::ParseError;
 use crate::types::relocation::{parse_relocation, Relocation};
 use crate::types::segment::{parse_segment, parse_segment_data, Segment, SegmentData};
 use crate::types::symbol_table::{parse_symbol_table_entry, SymbolTableEntry};
-
-use super::symbol_table::{SymbolName, SymbolTableEntryType};
+use crate::types::symbol_table::{SymbolName, SymbolTableEntryType};
 
 #[derive(Debug, Clone)]
 pub struct ObjectIn {

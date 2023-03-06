@@ -1,6 +1,6 @@
 use std::{fmt, ops::Deref};
 
-use super::errors::ParseError;
+use crate::types::errors::ParseError;
 
 #[derive(Eq, Ord, PartialEq, PartialOrd, Clone, Hash, Debug)]
 pub enum SymbolName {

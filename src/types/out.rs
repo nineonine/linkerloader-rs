@@ -5,9 +5,7 @@ use crate::types::object::MAGIC_NUMBER;
 use crate::types::relocation::Relocation;
 use crate::types::segment::*;
 
-use super::symbol_table::SymbolName;
-
-pub type Address = i32;
+use super::symbol_table::{SymbolName, SymbolTableEntry, SymbolTableEntryType};
 
 #[derive(Debug)]
 pub struct ObjectOut {
@@ -15,9 +13,9 @@ pub struct ObjectOut {
     pub nsyms: i32,
     pub nrels: i32,
     pub segments: BTreeMap<SegmentName, Segment>,
-    pub symtable: BTreeMap<SymbolName, Address>,
-    pub object_data: BTreeMap<SegmentName, SegmentData>,
+    pub symbol_table: Vec<SymbolTableEntry>,
     pub relocations: Vec<Relocation>,
+    pub object_data: BTreeMap<SegmentName, SegmentData>,
 }
 
 impl Default for ObjectOut {
@@ -33,7 +31,7 @@ impl ObjectOut {
             nsyms: 0,
             nrels: 0,
             segments: BTreeMap::new(),
-            symtable: BTreeMap::new(),
+            symbol_table: Vec::new(),
             object_data: BTreeMap::new(),
             relocations: Vec::new(),
         }
@@ -42,7 +40,7 @@ impl ObjectOut {
     pub fn ppr(&self) -> String {
         let mut s = String::new();
         s.push_str(MAGIC_NUMBER);
-        s.push_str("-OUT\n");
+        s.push('\n');
         s.push_str(format!("{:X} {:X} {:X}\n", self.nsegs, self.nsyms, self.nrels).as_str());
         let mut segs = vec![];
         let mut code_and_data = vec![];
@@ -67,6 +65,24 @@ impl ObjectOut {
                 }
             }
         }
+
+        let mut stes = vec![];
+        for ste in self.symbol_table.iter() {
+            let name = match &ste.st_name {
+                SymbolName::SName(s) => s.to_owned(),
+                SymbolName::WrappedSName(s) => match &ste.st_type {
+                    SymbolTableEntryType::D => format!("real_{s}"),
+                    SymbolTableEntryType::U => format!("wrap_{s}"),
+                },
+            };
+            stes.push(format!(
+                "{name} {:X} {:X} {}",
+                ste.st_value, ste.st_seg, ste.st_type
+            ))
+        }
+        s.push_str(stes.join("\n").as_str());
+        s.push('\n');
+
         s.push_str(segs.join("\n").as_str());
         s.push('\n');
 

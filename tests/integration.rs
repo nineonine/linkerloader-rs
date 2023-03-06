@@ -511,13 +511,13 @@ fn symbol_name_resolution_1() {
             assert!(info.global_symtable.contains_key(&symbol!("foo")));
             assert!(info.global_symtable.contains_key(&symbol!("bar")));
             let foo_ste = info.global_symtable.get(&symbol!("foo")).unwrap().clone();
-            assert_eq!("mod_2", foo_ste.0.as_ref().unwrap().0);
-            assert_eq!(0, foo_ste.0.as_ref().unwrap().1);
+            assert_eq!("mod_2", foo_ste.0.as_ref().unwrap().defn_mod_id);
+            assert_eq!(Some(0), foo_ste.0.as_ref().unwrap().defn_ste_ix);
             assert!(foo_ste.1.contains_key("mod_1"));
             assert_eq!(0, *foo_ste.1.get("mod_1").unwrap());
             let bar_ste = info.global_symtable.get(&symbol!("bar")).unwrap().clone();
-            assert_eq!("mod_1", bar_ste.0.as_ref().unwrap().0);
-            assert_eq!(1, bar_ste.0.as_ref().unwrap().1);
+            assert_eq!("mod_1", bar_ste.0.as_ref().unwrap().defn_mod_id);
+            assert_eq!(Some(1), bar_ste.0.as_ref().unwrap().defn_ste_ix);
             assert!(bar_ste.1.contains_key("mod_2"));
             assert_eq!(1, *bar_ste.1.get("mod_2").unwrap());
         }
@@ -564,7 +564,7 @@ fn symbol_value_resolution() {
                 .0
                 .clone()
                 .unwrap()
-                .2
+                .defn_addr
                 .unwrap();
             assert_eq!(0x20, foo_abs_addr);
             let bar_abs_addr = info
@@ -574,7 +574,7 @@ fn symbol_value_resolution() {
                 .0
                 .clone()
                 .unwrap()
-                .2
+                .defn_addr
                 .unwrap();
             assert_eq!(0x5A + 0x5, bar_abs_addr);
             let baz_abs_addr = info
@@ -584,7 +584,7 @@ fn symbol_value_resolution() {
                 .0
                 .clone()
                 .unwrap()
-                .2
+                .defn_addr
                 .unwrap();
             assert_eq!(0x78 + 0x2, baz_abs_addr);
         }
@@ -610,6 +610,7 @@ fn static_lib_dir() {
             assert!(symbols.get("libmod_3").unwrap().contains(&symbol!("baz")));
         }
         Ok(StaticLib::FileLib { .. }) => panic!("unexpected StaticLib::FileLib"),
+        Ok(StaticLib::Stub(_)) => panic!("unexpected StaticLib::StubLib"),
         Err(e) => panic!("{}: {:?}", dirname, e),
     }
 }
@@ -626,6 +627,7 @@ fn static_lib_file() {
             assert_eq!(2, *symbols.get(&symbol!("baz")).unwrap());
         }
         Ok(StaticLib::DirLib { .. }) => panic!("unexpected StaticLib::DirLib"),
+        Ok(StaticLib::Stub(_)) => panic!("unexpected StaticLib::StubLib"),
         Err(e) => panic!("{}: {:?}", dirname, e),
     }
 }
@@ -656,6 +658,7 @@ fn build_static_lib_dir() {
                     assert!(symbols.get("libmod_3").unwrap().contains(&symbol!("baz")));
                 }
                 Ok(StaticLib::FileLib { .. }) => panic!("unexpected StaticLib::FileLib"),
+                Ok(StaticLib::Stub(_)) => panic!("unexpected StaticLib::StubLib"),
                 Err(e) => panic!("build_static_lib_dir: {e:?}"),
             }
         }
@@ -689,6 +692,7 @@ fn build_static_lib_file() {
                     assert_eq!(2, *symbols.get(&symbol!("baz")).unwrap());
                 }
                 Ok(StaticLib::DirLib { .. }) => panic!("unexpected StaticLib::DirLib"),
+                Ok(StaticLib::Stub(_)) => panic!("unexpected StaticLib::StubLib"),
                 Err(e) => panic!("build_static_lib_file: {e:?}"),
             }
         }
@@ -1234,6 +1238,7 @@ fn static_shared_libs() {
     let lib3_objs = vec!["libmod_1"];
     let _ = librarian.build_libdir(Some(&testdir), Some("staticlib3"), lib3_objs);
     // build shared lib (linked obj and stubs)
+
     // build project with shared libs
     ensure_clean_state_extra(&testdir, vec!["staticlib1", "staticlib2", "staticlib3"]);
 }

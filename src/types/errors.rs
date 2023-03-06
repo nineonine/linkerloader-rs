@@ -46,6 +46,8 @@ pub enum LinkError {
     AddressOverflowError,
     IntOverflowError,
     WrappedSymbolNameAlreadyExists,
+    SharedLibsReferenceCycle,
+    SharedLibRefDefnNotFound,
 }
 
 #[derive(Debug, PartialEq, Eq)]

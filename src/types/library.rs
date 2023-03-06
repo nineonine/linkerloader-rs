@@ -4,11 +4,14 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::{env, fs};
 
-use crate::linker::editor::{LinkerEditor, ObjectID};
+use crate::common::{ObjectID, MAGIC_NUMBER_LIB, MAP_FILE_NAME};
+use crate::linker::editor::LinkerEditor;
 use crate::types::errors::LibError;
 use crate::types::object::{parse_object_file, ObjectIn, MAGIC_NUMBER};
 use crate::types::symbol_table::SymbolName;
 use crate::utils::{count_new_lines, read_object_file};
+
+use super::stub::StubLib;
 
 type ModOffset = usize;
 
@@ -24,15 +27,13 @@ pub enum StaticLib {
         symbols: HashMap<SymbolName, ModOffset>,
         objects: Vec<ObjectIn>,
     },
+    Stub(StubLib),
 }
 
 enum LibFormat {
     DirFormat,
     FileFormat,
 }
-
-pub const MAP_FILE_NAME: &str = "MAP";
-pub const MAGIC_NUMBER_LIB: &str = "LIBRARY";
 
 impl StaticLib {
     pub fn parse(path: &str) -> Result<StaticLib, LibError> {
@@ -53,6 +54,7 @@ impl StaticLib {
         match self {
             StaticLib::DirLib { libname, .. } => libname,
             StaticLib::FileLib { libname, .. } => libname,
+            StaticLib::Stub(stub) => &stub.libname,
         }
     }
 

@@ -1,3 +1,11 @@
+use crate::common::{
+    Address, LibName, StubMemberName, LIB_NAME_FILE, MAP_FILE_NAME, STUB_MAGIC_NUMBER,
+};
+use crate::types::{
+    errors::{LibError, ParseError},
+    symbol_table::SymbolName,
+};
+use either::Either::{self, Left, Right};
 use std::{
     collections::BTreeMap,
     env,
@@ -5,21 +13,6 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
-
-use either::Either::{self, Left, Right};
-
-use super::{
-    errors::{LibError, ParseError},
-    library::{StaticLib, MAP_FILE_NAME},
-    out::{Address, ObjectOut},
-    symbol_table::SymbolName,
-};
-
-pub const STUB_MAGIC_NUMBER: &str = "STUB";
-pub const LIB_NAME_FILE: &str = "LIBRARY NAME";
-
-type LibName = String;
-type StubMemberName = String;
 
 #[derive(Debug)]
 pub struct StubMember {
@@ -54,15 +47,9 @@ pub struct StubLib {
 }
 
 impl StubLib {
-    pub fn from_lib(_obj: &ObjectOut, lib: &StaticLib) -> Self {
-        match lib {
-            StaticLib::FileLib { .. } => {
-                panic!("StubLib::from_lib: not implemented for file format")
-            }
-            StaticLib::DirLib { .. } => {}
-        }
+    pub fn new(name: String) -> Self {
         StubLib {
-            libname: lib.get_name().clone(),
+            libname: name,
             members: BTreeMap::new(),
             defs: BTreeMap::new(),
             deps: Vec::new(),
