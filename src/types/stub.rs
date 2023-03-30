@@ -16,13 +16,22 @@ use std::{
 
 #[derive(Debug)]
 pub struct StubMember {
+    pub libname: LibName,
     pub name: StubMemberName,
     pub syms: BTreeMap<SymbolName, Either<Address, LibName>>,
 }
 
 impl StubMember {
-    pub fn new(name: StubMemberName, syms: BTreeMap<SymbolName, Either<Address, LibName>>) -> Self {
-        StubMember { name, syms }
+    pub fn new(
+        libname: LibName,
+        name: StubMemberName,
+        syms: BTreeMap<SymbolName, Either<Address, LibName>>,
+    ) -> Self {
+        StubMember {
+            libname,
+            name,
+            syms,
+        }
     }
 
     pub fn serialize(&self) -> String {
@@ -111,7 +120,7 @@ impl StubLib {
                     }
                 } else {
                     println!("reading stub member {}", file_name.as_str());
-                    match StubLib::parse_stub_member(&file_name, &file_contents) {
+                    match StubLib::parse_stub_member(&libname, &file_name, &file_contents) {
                         Ok(member) => {
                             members.insert(file_name, member);
                         }
@@ -128,7 +137,11 @@ impl StubLib {
         })
     }
 
-    fn parse_stub_member(libname: &str, file_contents: &str) -> Result<StubMember, ParseError> {
+    fn parse_stub_member(
+        libname: &str,
+        membername: &str,
+        file_contents: &str,
+    ) -> Result<StubMember, ParseError> {
         let mut input = file_contents.lines();
 
         match input.next() {
@@ -160,7 +173,11 @@ impl StubLib {
                 _ => return Err(ParseError::UnexpectedParseError),
             }
         }
-        Ok(StubMember::new(libname.to_owned(), syms))
+        Ok(StubMember::new(
+            libname.to_owned(),
+            membername.to_owned(),
+            syms,
+        ))
     }
 
     pub fn write_to_disk(
@@ -211,6 +228,16 @@ impl StubLib {
             map_file.push(entry.join(" "));
         }
         map_file.join("\n")
+    }
+
+    pub fn find_defn_addr(&self, sym: &SymbolName) -> Option<Address> {
+        match self.members.values().find(|&m| m.syms.get(sym).is_some()) {
+            Some(member) => match member.syms.get(sym) {
+                Some(Either::Left(addr)) => Some(*addr),
+                _ => None,
+            },
+            None => None,
+        }
     }
 
     fn make_library_file(&self) -> String {

@@ -2,7 +2,7 @@ LINK
 3 7 5
 .text 0 10 PWR
 .data 12 C PWR
-.bss 1C 4
+.bss 1C 4 PWR
 fun 0 1 D
 datavar 0 2 D
 libfoo 0 0 U

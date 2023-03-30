@@ -55,6 +55,7 @@ pub enum LibError {
     UnexpectedLibError,
     ObjectParseFailure(ParseError),
     StubMemberParseFailure(ParseError),
+    ObjectLinkError(LinkError),
     ParseLibError,
     IOError,
 }

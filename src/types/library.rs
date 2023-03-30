@@ -30,9 +30,11 @@ pub enum StaticLib {
     Stub(StubLib),
 }
 
+#[allow(clippy::enum_variant_names)]
 enum LibFormat {
     DirFormat,
     FileFormat,
+    StubFormat,
 }
 
 impl StaticLib {
@@ -40,6 +42,10 @@ impl StaticLib {
         match StaticLib::infer_lib_format(path) {
             LibFormat::DirFormat => StaticLib::parse_dir_lib(path),
             LibFormat::FileFormat => StaticLib::parse_file_lib(path),
+            LibFormat::StubFormat => {
+                let stub = StubLib::parse(path)?;
+                Ok(StaticLib::Stub(stub))
+            }
         }
     }
 
@@ -61,7 +67,11 @@ impl StaticLib {
     fn infer_lib_format(path: &str) -> LibFormat {
         let p = Path::new(path);
         if p.is_dir() {
-            LibFormat::DirFormat
+            if p.ends_with("stublib") {
+                LibFormat::StubFormat
+            } else {
+                LibFormat::DirFormat
+            }
         } else {
             LibFormat::FileFormat
         }
@@ -305,14 +315,39 @@ impl StaticLib {
         Ok(name.to_str().unwrap().to_owned())
     }
 
-    pub fn build_shared_lib(&self, start: i32) -> Result<(), LibError> {
+    pub fn build_shared_lib(
+        &self,
+        start: i32,
+        libs: Vec<StaticLib>,
+        basepath: &str,
+    ) -> Result<(), LibError> {
         let mut editor: LinkerEditor = LinkerEditor::new(start, 0x0, 0x0, false);
-        let _obj_out = editor.link(self.get_objects().into_iter().collect(), vec![], vec![]);
+        match self {
+            StaticLib::DirLib { .. } => {
+                match editor.link_lib(self.get_objects().into_iter().collect(), libs, vec![]) {
+                    Ok((obj, stub_lib, _info)) => {
+                        let path = PathBuf::from(basepath);
+                        let name = PathBuf::from(format!("{}_libout", stub_lib.get_name()));
+                        let lib_path = path.join(name);
+                        // write linked lib and stubs to disk
+                        let mut map_file = File::create(lib_path)?;
+                        map_file.write_all(obj.ppr(false).as_bytes())?;
+                        // write stubs
+                        match stub_lib {
+                            StaticLib::Stub(stub) => {
+                                stub.write_to_disk(Some(basepath), None)?;
+                            }
+                            _ => panic!("not implemented"),
+                        }
+                    }
+                    Err(e) => {
+                        return Err(LibError::ObjectLinkError(e));
+                    }
+                }
+            }
+            _ => panic!("not implemented"),
+        }
 
         Ok(())
     }
-}
-pub struct StaticSharedLib {
-    // pub linked_exe: ObjectOut,
-    // pub stub: StubLib,
 }

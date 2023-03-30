@@ -58,11 +58,29 @@ impl Librarian {
         Ok(())
     }
 
-    pub fn build_static_shared_lib(&mut self, path: &str, start: i32) -> Result<(), LibError> {
+    pub fn build_static_shared_lib(
+        &mut self,
+        path: &str,
+        libdeps: Vec<String>,
+        start: i32,
+    ) -> Result<(), LibError> {
         self.logger.do_log(
             LogLevel::Info,
             &format!("Building statically linked shared library at {path:?}"),
         );
-        StaticLib::parse(path)?.build_shared_lib(start)
+        let mut libs = vec![];
+        for libname in libdeps.iter() {
+            let lib = StaticLib::parse(libname)?;
+            libs.push(lib);
+        }
+        println!("**** num of libs parsed: {}", libs.len());
+        match StaticLib::parse(path)?.build_shared_lib(start, libs, path) {
+            Err(e) => panic!("{e:?}"),
+            Ok(_) => {
+                self.logger
+                    .do_log(LogLevel::Info, "Successfully built static shared lib");
+            }
+        }
+        Ok(())
     }
 }

@@ -1,5 +1,9 @@
 LINK
-1 1 0
+3 1 0
 .text 0 10 PWR
+.data A 4 PWR
+.bss F 4 PWR
 malloc C 1 D
 00 00 00 00 00 00 00 00 00 00 00 00 DE AD BE EF
+00 00 00 00
+00 00 00 00

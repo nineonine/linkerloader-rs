@@ -3,18 +3,21 @@ use std::ops::Deref;
 
 // use either::Either::{Left, Right};
 
-use crate::common::{Defn, ObjectID, Refs};
+use either::Either::{self, Left, Right};
+
+use crate::common::{Defn, DefnProvenance, ObjectID, Refs};
 use crate::types::errors::LinkError;
 use crate::types::library::StaticLib;
 use crate::types::object::ObjectIn;
 use crate::types::out::ObjectOut;
 use crate::types::relocation::{RelRef, RelType, Relocation};
 use crate::types::segment::{Segment, SegmentData, SegmentName};
-// use crate::types::stub::StubMember;
+use crate::types::stub::{StubLib, StubMember};
 use crate::types::symbol_table::{SymbolName, SymbolTableEntry};
 use crate::utils::{find_seg_start, mk_addr_4, mk_i_4, x_to_i2, x_to_i4};
 use crate::{logger::*, wrapped_symbol};
 
+#[derive(Eq, PartialEq)]
 pub enum LinkObjType {
     SharedLib,
     Executable,
@@ -107,7 +110,7 @@ impl LinkerEditor {
             data_start_boundary,
             bss_start_boundary,
             logger: Logger::new_stdout_logger(silent),
-            session_objects: BTreeMap::new(),
+            session_objects: BTreeMap::new(), // this does not contain stubs (should it?)
             _endianness: Endianness::BigEndian, // always BigEndian now ...
         };
         r.print_linker_editor_cfg();
@@ -120,7 +123,10 @@ impl LinkerEditor {
         static_libs: Vec<StaticLib>,
         wrap_routines: Vec<SymbolName>,
     ) -> Result<(ObjectOut, LinkerInfo), LinkError> {
-        self.do_link(objs_in, static_libs, wrap_routines, LinkObjType::Executable)
+        match self.do_link(objs_in, static_libs, wrap_routines, LinkObjType::Executable) {
+            Err(e) => Err(e),
+            Ok((out, _, info)) => Ok((out, info)),
+        }
     }
 
     pub fn link_lib(
@@ -128,8 +134,11 @@ impl LinkerEditor {
         objs_in: BTreeMap<ObjectID, ObjectIn>,
         static_libs: Vec<StaticLib>,
         wrap_routines: Vec<SymbolName>,
-    ) -> Result<(ObjectOut, LinkerInfo), LinkError> {
-        self.do_link(objs_in, static_libs, wrap_routines, LinkObjType::SharedLib)
+    ) -> Result<(ObjectOut, StaticLib, LinkerInfo), LinkError> {
+        match self.do_link(objs_in, static_libs, wrap_routines, LinkObjType::SharedLib) {
+            Err(e) => Err(e),
+            Ok((out, lib, info)) => Ok((out, lib.unwrap(), info)),
+        }
     }
 
     // for each object_in
@@ -143,8 +152,8 @@ impl LinkerEditor {
         mut objs_in: BTreeMap<ObjectID, ObjectIn>,
         static_libs: Vec<StaticLib>,
         wrap_routines: Vec<SymbolName>,
-        _link_obj_ty: LinkObjType,
-    ) -> Result<(ObjectOut, LinkerInfo), LinkError> {
+        link_obj_ty: LinkObjType,
+    ) -> Result<(ObjectOut, Option<StaticLib>, LinkerInfo), LinkError> {
         let mut out = ObjectOut::new();
         let mut info = LinkerInfo::new();
 
@@ -159,7 +168,7 @@ impl LinkerEditor {
         }
 
         self.logger
-            .debug(format!("Object out (initial allocation):\n{}", out.ppr()).as_str());
+            .debug(format!("Object out (initial allocation):\n{}", out.ppr(true)).as_str());
         self.logger
             .debug(format!("Info (initial allocation):\n{}", info.ppr()).as_str());
 
@@ -180,7 +189,7 @@ impl LinkerEditor {
         // update segment offsets
         let bss_start = self.patch_segment_offsets(&mut out, &mut info, got_size);
         self.logger
-            .debug(format!("Object out (segment offset patching):\n{}", out.ppr()).as_str());
+            .debug(format!("Object out (segment offset patching):\n{}", out.ppr(true)).as_str());
         self.logger
             .debug(format!("Info (segment offset patching):\n{}", info.ppr()).as_str());
 
@@ -206,10 +215,15 @@ impl LinkerEditor {
         /////////////////////////////////////////////
         self.logger.debug("Linking complete");
         self.logger
-            .debug(format!("Object out (final):\n{}", out.ppr()).as_str());
+            .debug(format!("Object out (final):\n{}", out.ppr(true)).as_str());
         self.logger
             .debug(format!("Info (final):\n{}", info.ppr()).as_str());
-        Ok((out, info))
+
+        let mut stub_lib = None;
+        if link_obj_ty == LinkObjType::SharedLib {
+            stub_lib = Some(self.build_stub_lib(&info));
+        }
+        Ok((out, stub_lib, info))
     }
 
     // Allocate storage and build symbol tables for given module object
@@ -356,6 +370,7 @@ impl LinkerEditor {
             self.logger.debug("GOT segment will be allocated");
             self.alloc_got(out, got_size);
         }
+        // TODO: what if those segments are missing? ..
         self.patch_data_seg(out, info);
         self.patch_bss_seg(out, info)
     }
@@ -437,15 +452,28 @@ impl LinkerEditor {
                     out.nsegs += 1;
                     seg
                 });
-            self.logger
-                .debug(format!("Object out (common block allocation):\n{}", out.ppr()).as_str());
+            self.logger.debug(
+                format!("Object out (common block allocation):\n{}", out.ppr(true)).as_str(),
+            );
         }
     }
 
     // this assumes all definitions have been spotted and are in place
-    fn resolve_global_sym_offsets(&self, info: &mut LinkerInfo) {
+    fn resolve_global_sym_offsets(&mut self, info: &mut LinkerInfo) {
+        let syms: Vec<_> = info.global_symtable.keys().collect();
+        self.logger.debug(&format!(
+            "Resolving global symbol offsets\n  Symbols: {syms:?}"
+        ));
         for (defn, _) in info.global_symtable.values_mut() {
+            self.logger.debug(&format!("Looking at {defn:?}"));
             if let Some(Defn {
+                defn_addr: Some(_),
+                defn_prov: DefnProvenance::FromSharedLib(..),
+                ..
+            }) = defn
+            {
+                continue; // nothing to do here
+            } else if let Some(Defn {
                 defn_mod_id,
                 defn_ste_ix: Some(ste_ix),
                 defn_addr,
@@ -511,9 +539,6 @@ impl LinkerEditor {
                                             }
                                         }
                                         visited_libs_objs.insert(lib_obj_name.to_string());
-                                        self.logger.debug(&format!(
-                                            "Remaining undefined symbols: {undef_syms:?}"
-                                        ));
                                     }
                                     break 'outer;
                                 }
@@ -547,9 +572,6 @@ impl LinkerEditor {
                                         }
                                     }
                                     visited_libs_objs.insert(libobj_id);
-                                    self.logger.debug(&format!(
-                                        "Remaining undefined symbols: {undef_syms:?}"
-                                    ));
                                 }
                             }
                         }
@@ -560,13 +582,62 @@ impl LinkerEditor {
                             if visited_libs_objs.contains(&libobj_id) {
                                 continue;
                             }
-                            if stub.syms.contains_key(&undef_sym) {
-                                // self.add_shared_lib_defn(info, stub, &undef_sym);
+                            match stub.syms.get(&undef_sym) {
+                                Some(Right(libname)) => {
+                                    self.logger.debug(&format!(
+                                        " Symbol defn is in '{undef_sym}' in other library '{libname}'\n"
+                                    ));
+                                    for lib in static_libs.iter() {
+                                        if let StaticLib::Stub(stublib) = lib {
+                                            if &stublib.libname != libname {
+                                                continue;
+                                            }
+                                            match stublib.find_defn_addr(&undef_sym) {
+                                                None => {
+                                                    return Err(LinkError::SharedLibRefDefnNotFound)
+                                                }
+                                                Some(sym_addr) => {
+                                                    info.global_symtable
+                                                        .entry(undef_sym.to_owned())
+                                                        .and_modify(|(defn, _refs)| {
+                                                            assert!(defn.is_none());
+                                                            *defn = Some(Defn::shared_lib_defn(
+                                                                stub.name.clone(),
+                                                                sym_addr,
+                                                                stub.libname.to_owned(),
+                                                            ));
+                                                        });
+                                                    break 'outer;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                Some(Left(addr)) => {
+                                    self.logger.debug(&format!(
+                                        " Found defn for symbol '{undef_sym}' in '{}' stub member",
+                                        stub.name
+                                    ));
+                                    info.global_symtable.entry(undef_sym.to_owned()).and_modify(
+                                        |(defn, _refs)| {
+                                            assert!(defn.is_none());
+                                            *defn = Some(Defn::shared_lib_defn(
+                                                stub.name.clone(),
+                                                *addr,
+                                                stub.libname.to_owned(),
+                                            ));
+                                        },
+                                    );
+                                    break 'outer;
+                                }
+                                None => {}
                             }
                         }
                     }
                 }
             }
+            self.logger
+                .debug(&format!("Remaining undefined symbols: {undef_syms:?}"));
         }
         Ok(())
     }
@@ -1075,35 +1146,39 @@ impl LinkerEditor {
         Ok(())
     }
 
-    // // this assumes reference is indeed defined in given stub member
-    // fn add_shared_lib_defn(&self, info: &mut LinkerInfo, stub0: &StubMember, sym: &SymbolName) -> Result<(), LinkError> {
-    //     assert!(stub0.syms.contains_key(sym));
-    //     let visited_members: HashSet<&str> = HashSet::new();
-    //     let stub_libs = vec![stub0];
-    //     while let Some(stub) = stub_libs.pop() {
-    //         // if visited_members.contains(&stub.name) {
-    //         //     return Err(LinkError::SharedLibsReferenceCycle);
-    //         // }
-    //         match stub.syms.get(sym) {
-    //             None => {
-    //                 return Err(LinkError::SharedLibRefDefnNotFound)
-    //             },
-    //             Some(Right(libname)) => {
-    //                 self.logger.debug(&format!(" Found defn for symbol '{sym}' in {}\n", stub.name));
-
-    //             },
-    //             Some(Left(addr)) => {
-    //                 self.logger.debug(&format!(" Found defn for symbol '{sym}' in {}\n", stub.name));
-    //                 info.global_symtable
-    //                     .entry(sym.to_owned())
-    //                     .and_modify(|(defn, _refs)| {
-    //                         assert!(defn.is_none());
-    //                         *defn = Some(Defn::shared_lib_defn(stub.name, *addr));
-    //                     });
-    //                 break;
-    //             }
-    //         }
-    //     }
-    //     Ok(())
-    // }
+    fn build_stub_lib(&mut self, info: &LinkerInfo) -> StaticLib {
+        self.logger.debug("Building stub library");
+        let mut stub_lib = StubLib::new("stublib".to_string());
+        for (obj_id, obj) in self.session_objects.iter() {
+            let mut syms = BTreeMap::new();
+            for ste in obj.symbol_table.iter() {
+                match info.global_symtable.get(&ste.st_name) {
+                    None => panic!("build_stub_lib: global symbol '{}' not found", ste.st_name),
+                    Some((maybe_defn, _refs)) => match maybe_defn {
+                        None => panic!("build_stub_lib: global symbol defn undefined"),
+                        Some(defn) => match &defn.defn_prov {
+                            DefnProvenance::FromObjectIn => {
+                                syms.insert(
+                                    ste.st_name.to_owned(),
+                                    Either::Left(defn.defn_addr.unwrap()),
+                                );
+                            }
+                            DefnProvenance::FromSharedLib(libname) => {
+                                syms.insert(
+                                    ste.st_name.to_owned(),
+                                    Either::Right(libname.to_owned()),
+                                );
+                            }
+                        },
+                    },
+                }
+            }
+            let stub_member =
+                StubMember::new(stub_lib.libname.to_owned(), format!("{obj_id}_stub"), syms);
+            stub_lib
+                .members
+                .insert(stub_member.name.to_owned(), stub_member);
+        }
+        StaticLib::Stub(stub_lib)
+    }
 }

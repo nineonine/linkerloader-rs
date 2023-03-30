@@ -37,11 +37,11 @@ impl ObjectOut {
         }
     }
 
-    pub fn ppr(&self) -> String {
+    pub fn ppr(&self, debug: bool) -> String {
         let mut s = String::new();
         s.push_str(MAGIC_NUMBER);
         s.push('\n');
-        s.push_str(format!("{:X} {:X} {:X}\n", self.nsegs, self.nsyms, self.nrels).as_str());
+        s.push_str(format!("{:X} {:X} {:X}", self.nsegs, self.nsyms, self.nrels).as_str());
         let mut segs = vec![];
         let mut code_and_data = vec![];
         for segment_name in SegmentName::order().iter() {
@@ -52,11 +52,13 @@ impl ObjectOut {
                     segment_name, seg.segment_start, seg.segment_len
                 ));
                 if let Some(segment_data) = self.object_data.get(segment_name) {
-                    code_and_data.push(format!(
-                        "  Obj code/data len: {:X} {}",
-                        segment_data.len(),
-                        segment_name
-                    ));
+                    if debug {
+                        code_and_data.push(format!(
+                            "  Obj code/data len: {:X} {}",
+                            segment_data.len(),
+                            segment_name
+                        ));
+                    }
                     let mut ppr_data = vec![];
                     for d in segment_data.deref().iter() {
                         ppr_data.push(format!("{d:02X}"));

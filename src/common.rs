@@ -13,16 +13,16 @@ pub type ObjectID = String;
 pub type Address = i32;
 
 #[derive(Debug, Clone)]
-enum DefnProvenance {
+pub enum DefnProvenance {
     FromObjectIn,
-    FromSharedLib,
+    FromSharedLib(LibName),
 }
 #[derive(Debug, Clone)]
 pub struct Defn {
     pub defn_mod_id: ObjectID,
     pub defn_ste_ix: Option<usize>, // None for shared libs
     pub defn_addr: Option<i32>,
-    _defn_prov: DefnProvenance,
+    pub defn_prov: DefnProvenance,
 }
 
 impl Defn {
@@ -31,16 +31,16 @@ impl Defn {
             defn_mod_id,
             defn_ste_ix: Some(ste_ix),
             defn_addr,
-            _defn_prov: DefnProvenance::FromObjectIn,
+            defn_prov: DefnProvenance::FromObjectIn,
         }
     }
 
-    pub fn shared_lib_defn(defn_mod_id: ObjectID, addr: i32) -> Self {
+    pub fn shared_lib_defn(defn_mod_id: ObjectID, addr: i32, libname: LibName) -> Self {
         Defn {
             defn_mod_id,
             defn_ste_ix: None,
             defn_addr: Some(addr),
-            _defn_prov: DefnProvenance::FromSharedLib,
+            defn_prov: DefnProvenance::FromSharedLib(libname),
         }
     }
 }

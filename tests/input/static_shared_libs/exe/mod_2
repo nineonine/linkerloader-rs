@@ -1,7 +1,7 @@
 LINK
 2 3 2
-.text 0
-.data F
+.text 0 8 PWR
+.data F 4 PWR
 babababa 0 1 D
 atof 0 0 U
 libdata 0 0 U

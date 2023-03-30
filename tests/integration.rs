@@ -1237,8 +1237,43 @@ fn static_shared_libs() {
     // build 3rd static library that won't be built as shared
     let lib3_objs = vec!["libmod_1"];
     let _ = librarian.build_libdir(Some(&testdir), Some("staticlib3"), lib3_objs);
-    // build shared lib (linked obj and stubs)
+
+    // now build shared lib (linked obj and stubs)
+    let staticlib1 = format!("{testdir}/staticlib1");
+    let libdeps1 = vec![];
+    match librarian.build_static_shared_lib(&staticlib1, libdeps1, 0x64) {
+        Err(e) => panic!("{testdir} {e:?}"),
+        Ok(_) => {}
+    }
+    let staticlib2 = format!("{testdir}/staticlib2");
+    let libdeps2 = vec![format!("{staticlib1}/stublib")];
+    match librarian.build_static_shared_lib(&staticlib2, libdeps2, 0xC8) {
+        Err(e) => panic!("{testdir} {e:?}"),
+        Ok(_) => {}
+    }
 
     // build project with shared libs
+    let objects = read_objects_from_dir(&format!("{testdir}/exe"));
+    let sharedlib1 = read_lib(&format!("{staticlib1}/stublib")).unwrap();
+    let sharedlib2 = read_lib(&format!("{staticlib2}/stublib")).unwrap();
+    let dirlib1 = read_lib(&format!("{testdir}/staticlib3")).unwrap();
+    let staticlibs = vec![sharedlib1, sharedlib2, dirlib1];
+    let mut editor = LinkerEditor::new(0xFF, 0x0, 0x0, false);
+    match editor.link(objects, staticlibs, NO_WRAP_ROUTINES) {
+        Ok((out, info)) => {
+            println!("{out:?}");
+            println!("{info:?}");
+            let obj_code_text = out.object_data.get(&SegmentName::TEXT).unwrap();
+            assert_eq!(
+                0xD4,
+                x_to_i4(obj_code_text.get_at(0x8, 0x4).unwrap()).unwrap()
+            );
+            assert_eq!(
+                0x70,
+                x_to_i4(obj_code_text.get_at(0xC, 0x4).unwrap()).unwrap()
+            );
+        }
+        Err(e) => panic!("{testdir} {e:?}"),
+    }
     ensure_clean_state_extra(&testdir, vec!["staticlib1", "staticlib2", "staticlib3"]);
 }
